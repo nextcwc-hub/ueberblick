@@ -76,7 +76,9 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               'Fotos: Wikimedia Commons (freie Lizenzen, Urheber jeweils am Bild).\n'
-              'Wetter: Deutscher Wetterdienst über Bright Sky.\n'
+              'Wetter: Deutscher Wetterdienst (CC BY 4.0) über Bright Sky.\n'
+              'Ortsdaten: GeoNames (CC BY 4.0, geonames.org).\n'
+              'Schriften: Source Serif 4 und Inter (SIL Open Font License).\n'
               'Kurse: verzögert, ohne Gewähr.',
               style: sans(context, 13.5, h: 1.6, color: muted(context)),
             ),
