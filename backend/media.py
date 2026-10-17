@@ -1,4 +1,5 @@
 """Bilder (Wikimedia Commons, nur kommerziell nutzbare Lizenzen), Börsen- und Wetterdaten."""
+import json
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -57,23 +58,85 @@ def commons_candidates(query: str, n: int = 6) -> list[dict]:
 
 # ------------------------------------------------------------------ Börse
 
-SYMBOLS = [
-    ("^GDAXI", "DAX", "index"), ("^MDAXI", "MDAX", "index"), ("^TECDAX", "TecDAX", "index"),
-    ("^STOXX50E", "Euro Stoxx 50", "index"), ("^DJI", "Dow Jones", "index"),
-    ("^GSPC", "S&P 500", "index"), ("^NDX", "Nasdaq 100", "index"), ("^N225", "Nikkei 225", "index"),
-    ("EURUSD=X", "Euro / Dollar", "fx"), ("GC=F", "Gold", "commodity"),
-    ("BZ=F", "Öl (Brent)", "commodity"), ("BTC-EUR", "Bitcoin", "crypto"),
+# Symbol, Name, Art, Suchbegriffe für passende Nachrichten
+INSTRUMENTS = [
+    ("^GDAXI", "DAX", "index", ["DAX"]),
+    ("^MDAXI", "MDAX", "index", ["MDAX"]),
+    ("^TECDAX", "TecDAX", "index", ["TecDAX"]),
+    ("^SDAXI", "SDAX", "index", ["SDAX"]),
+    ("^STOXX50E", "Euro Stoxx 50", "index", ["Euro Stoxx", "EuroStoxx"]),
+    ("^FTSE", "FTSE 100", "index", ["FTSE", "Londoner Börse"]),
+    ("^FCHI", "CAC 40", "index", ["CAC"]),
+    ("^DJI", "Dow Jones", "index", ["Dow Jones", "Dow"]),
+    ("^GSPC", "S&P 500", "index", ["S&P 500", "S&P"]),
+    ("^NDX", "Nasdaq 100", "index", ["Nasdaq"]),
+    ("^N225", "Nikkei 225", "index", ["Nikkei"]),
+    ("^HSI", "Hang Seng", "index", ["Hang Seng", "Hongkonger Börse"]),
+    ("EURUSD=X", "Euro / Dollar", "fx", ["Euro", "Dollar", "Wechselkurs"]),
+    ("EURGBP=X", "Euro / Pfund", "fx", ["Pfund", "Sterling"]),
+    ("EURCHF=X", "Euro / Franken", "fx", ["Franken"]),
+    ("EURJPY=X", "Euro / Yen", "fx", ["Yen"]),
+    ("GC=F", "Gold", "commodity", ["Gold", "Goldpreis"]),
+    ("SI=F", "Silber", "commodity", ["Silber"]),
+    ("BZ=F", "Öl (Brent)", "commodity", ["Öl", "Ölpreis", "Brent", "Opec", "Rohöl"]),
+    ("NG=F", "Erdgas (US)", "commodity", ["Erdgas", "Gaspreis", "LNG"]),
+    ("^TNX", "US-Anleihen 10 J.", "bond", ["Anleihe", "Rendite", "Treasur", "Fed", "Zins"]),
+    ("BTC-EUR", "Bitcoin", "crypto", ["Bitcoin", "Krypto"]),
+    ("ETH-EUR", "Ethereum", "crypto", ["Ethereum", "Ether", "Krypto"]),
 ]
+
+STOCKS = [
+    ("ADS.DE", "Adidas"), ("AIR.DE", "Airbus"), ("ALV.DE", "Allianz"), ("BAS.DE", "BASF"),
+    ("BAYN.DE", "Bayer"), ("BEI.DE", "Beiersdorf"), ("BMW.DE", "BMW"), ("BNR.DE", "Brenntag"),
+    ("CBK.DE", "Commerzbank"), ("CON.DE", "Continental"), ("DTG.DE", "Daimler Truck"),
+    ("DBK.DE", "Deutsche Bank"), ("DB1.DE", "Deutsche Börse"), ("DHL.DE", "DHL Group"),
+    ("DTE.DE", "Deutsche Telekom"), ("EOAN.DE", "E.ON"), ("FRE.DE", "Fresenius"),
+    ("FME.DE", "Fresenius Medical Care"), ("G1A.DE", "GEA"), ("HNR1.DE", "Hannover Rück"),
+    ("HEI.DE", "Heidelberg Materials"), ("HEN3.DE", "Henkel"), ("IFX.DE", "Infineon"),
+    ("MBG.DE", "Mercedes-Benz"), ("MRK.DE", "Merck"), ("MTX.DE", "MTU Aero Engines"),
+    ("MUV2.DE", "Munich Re"), ("P911.DE", "Porsche"), ("PAH3.DE", "Porsche SE"),
+    ("QIA.DE", "Qiagen"), ("RHM.DE", "Rheinmetall"), ("RWE.DE", "RWE"), ("SAP.DE", "SAP"),
+    ("SRT3.DE", "Sartorius"), ("SIE.DE", "Siemens"), ("ENR.DE", "Siemens Energy"),
+    ("SHL.DE", "Siemens Healthineers"), ("SY1.DE", "Symrise"), ("VOW3.DE", "Volkswagen"),
+    ("VNA.DE", "Vonovia"), ("ZAL.DE", "Zalando"),
+]
+_ALIAS_EXTRA = {"VOW3.DE": ["VW"], "MBG.DE": ["Mercedes"], "DTE.DE": ["Telekom"],
+                "MUV2.DE": ["Münchener Rück"], "DHL.DE": ["DHL"]}
+
+H = {"User-Agent": "Mozilla/5.0"}
+HIST_EVERY = 3 * 3600
+
+
+def safe(sym: str) -> str:
+    return re.sub(r"[^A-Za-z0-9.-]", "_", sym)
+
+
+def _pts(res):
+    ts = res.get("timestamp") or []
+    cl = (res.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    return [[t, round(c, 4)] for t, c in zip(ts, cl) if c is not None]
 
 
 def _chart(sym: str, rng: str, interval: str):
     r = httpx.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-                  params={"range": rng, "interval": interval}, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+                  params={"range": rng, "interval": interval}, headers=H, timeout=15)
     res = r.json()["chart"]["result"][0]
-    ts = res.get("timestamp") or []
-    cl = res["indicators"]["quote"][0].get("close") or []
-    pts = [[t, round(c, 4)] for t, c in zip(ts, cl) if c is not None]
-    return res["meta"], pts
+    return res["meta"], _pts(res)
+
+
+def _spark(syms: list[str], rng: str, interval: str) -> dict:
+    out = {}
+    for i in range(0, len(syms), 20):
+        try:
+            r = httpx.get("https://query1.finance.yahoo.com/v7/finance/spark", headers=H, timeout=20,
+                          params={"symbols": ",".join(syms[i:i + 20]), "range": rng, "interval": interval})
+            for x in r.json()["spark"]["result"]:
+                resp = (x.get("response") or [None])[0]
+                if resp:
+                    out[x["symbol"]] = (resp.get("meta", {}), _pts(resp))
+        except Exception as ex:
+            print(f"  spark fail: {ex}")
+    return out
 
 
 def _thin(pts, n):
@@ -85,35 +148,82 @@ def _thin(pts, n):
     return out
 
 
-def _market(entry):
-    sym, name, kind = entry
-    try:
-        meta, intraday = _chart(sym, "1d", "5m")
-        _, hist = _chart(sym, "1y", "1d")
-        price = meta.get("regularMarketPrice") or (intraday[-1][1] if intraday else None)
-        prev = meta.get("chartPreviousClose") or meta.get("previousClose")
-        if price is None or not prev:
-            return None
-        return {
-            "sym": sym, "name": name, "kind": kind, "cur": meta.get("currency", ""),
-            "price": price, "prev": prev, "pct": round((price - prev) / prev * 100, 2),
-            "time": meta.get("regularMarketTime"),
-            "intraday": _thin(intraday, 120), "history": _thin(hist, 260),
-        }
-    except Exception as ex:
-        print(f"  market fail {sym}: {ex}")
+def _summary(sym, name, kind, alias, meta, intraday):
+    price = meta.get("regularMarketPrice") or (intraday[-1][1] if intraday else None)
+    prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+    if price is None or not prev:
         return None
+    vals = [p[1] for p in intraday]
+    return {
+        "sym": sym, "name": name, "kind": kind, "cur": meta.get("currency", ""), "alias": alias,
+        "price": price, "prev": prev, "pct": round((price - prev) / prev * 100, 2),
+        "open": vals[0] if vals else None,
+        "high": meta.get("regularMarketDayHigh") or (max(vals) if vals else None),
+        "low": meta.get("regularMarketDayLow") or (min(vals) if vals else None),
+        "yhigh": meta.get("fiftyTwoWeekHigh"), "ylow": meta.get("fiftyTwoWeekLow"),
+        "time": meta.get("regularMarketTime"),
+        "spark": [p[1] for p in _thin(intraday, 48)],
+    }
 
 
-def markets() -> dict:
-    with ThreadPoolExecutor(8) as ex:
-        items = [m for m in ex.map(_market, SYMBOLS) if m]
-    return {"updated": int(time.time()), "items": items}
+def markets(out_dir, prev: dict) -> dict:
+    """Schreibt Detaildateien nach out_dir/<sym>.json und gibt die Übersicht zurück."""
+    now = time.time()
+    need_hist = now - prev.get("hist_at", 0) > HIST_EVERY
+    items, details = [], {}
+
+    def main_inst(entry):
+        sym, name, kind, alias = entry
+        try:
+            meta, intraday = _chart(sym, "1d", "5m")
+            d = {"intraday": intraday}
+            if need_hist:
+                d["week"] = _chart(sym, "5d", "30m")[1]
+                d["history"] = _chart(sym, "1y", "1d")[1]
+            return _summary(sym, name, kind, alias, meta, intraday), d
+        except Exception as ex:
+            print(f"  market fail {sym}: {ex}")
+            return None, None
+
+    with ThreadPoolExecutor(6) as ex:
+        for entry, (s, d) in zip(INSTRUMENTS, ex.map(main_inst, INSTRUMENTS)):
+            if s:
+                items.append(s)
+                details[entry[0]] = d
+
+    syms = [s for s, _ in STOCKS]
+    intr = _spark(syms, "1d", "5m")
+    week = _spark(syms, "5d", "30m") if need_hist else {}
+    hist = _spark(syms, "1y", "1d") if need_hist else {}
+    for sym, name in STOCKS:
+        if sym not in intr:
+            continue
+        meta, intraday = intr[sym]
+        s = _summary(sym, name, "stock", [name] + _ALIAS_EXTRA.get(sym, []), meta, intraday)
+        if s:
+            items.append(s)
+            d = {"intraday": intraday}
+            if need_hist:
+                d["week"] = week.get(sym, (None, []))[1]
+                d["history"] = hist.get(sym, (None, []))[1]
+            details[sym] = d
+
+    for sym, d in details.items():
+        p = out_dir / f"{safe(sym)}.json"
+        if not need_hist:  # Wochen- und Jahresdaten aus dem letzten Abruf übernehmen
+            try:
+                old = json.loads(p.read_text(encoding="utf-8"))
+                d["week"], d["history"] = old.get("week", []), old.get("history", [])
+            except Exception:
+                d["week"], d["history"] = [], []
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"sym": sym, **d}, separators=(",", ":")), encoding="utf-8")
+    return {"updated": int(now), "hist_at": int(now) if need_hist else prev.get("hist_at", 0), "items": items}
 
 
 def markets_brief(m: dict) -> str:
     return "Aktuelle Marktdaten: " + "; ".join(
-        f"{x['name']} {x['price']:.2f} ({x['pct']:+.2f} %)" for x in m.get("items", []))
+        f"{x['name']} {x['price']:.2f} ({x['pct']:+.2f} %)" for x in m.get("items", []) if x["kind"] != "stock")
 
 
 # ------------------------------------------------------------------ Wetter (DWD via Bright Sky)

@@ -202,7 +202,8 @@ Ausgabe:
 - cat, imp (1-10): Kategorie und Bedeutung (siehe Vorgabe; bei Bedarf korrigieren).
 - image: Index des passendsten Bildkandidaten oder -1, wenn keiner wirklich passt. Ein Bild passt nur, wenn es das Thema zeigt, ohne in die Irre zu führen (kein Foto eines anderen Ereignisses, das wie das aktuelle wirkt; Porträts nur von zentral beteiligten Personen). Im Zweifel -1.
 - location: Hauptort (Stadt/Land) oder leer.
-- tone: Wirkung der Nachricht auf Leser. "positiv" = überwiegend gute Nachricht (Fortschritt, Erfolg, Rettung, Einigung, Durchbruch, Verbesserung, sportlicher Erfolg, erfreuliche Entdeckung). "negativ" = überwiegend belastend (Krieg, Gewalt, Tod, Katastrophe, Unglück, Verbrechen, schwere Krise, Verschlechterung). Sonst "neutral" (sachliche Politik, Zahlen ohne klare Richtung, gemischte Lage)."""
+- tone: Wirkung der Nachricht auf Leser. "positiv" = überwiegend gute Nachricht (Fortschritt, Erfolg, Rettung, Einigung, Durchbruch, Verbesserung, sportlicher Erfolg, erfreuliche Entdeckung). "negativ" = überwiegend belastend (Krieg, Gewalt, Tod, Katastrophe, Unglück, Verbrechen, schwere Krise, Verschlechterung). Sonst "neutral" (sachliche Politik, Zahlen ohne klare Richtung, gemischte Lage).
+- assets: Kürzel der Marktwerte aus der mitgelieferten Liste, die direkt Gegenstand der Meldung sind (betroffenes Unternehmen, Index, Rohstoff, Währung). Leer, wenn keiner direkt betroffen ist oder keine Liste mitgeliefert wurde."""
 
 WRITER_SCHEMA = {
     "type": "object",
@@ -228,9 +229,10 @@ WRITER_SCHEMA = {
         "image": {"type": "integer"},
         "location": {"type": "string"},
         "tone": {"type": "string", "enum": ["positiv", "neutral", "negativ"]},
+        "assets": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["title", "teaser", "summary", "sections", "facts", "positions",
-                 "outlook", "cat", "imp", "image", "location", "tone"],
+                 "outlook", "cat", "imp", "image", "location", "tone", "assets"],
     "additionalProperties": False,
 }
 
@@ -258,4 +260,5 @@ def write(event: dict, reports: list[dict], previous: dict | None, images: list[
             f"{i}: {im['title']} – {im['desc']}" for i, im in enumerate(images)))
     else:
         parts.append("BILDKANDIDATEN: keine (image = -1)")
-    return ask_json(WRITER_MODEL, WRITER_SYSTEM, "\n\n".join(parts), WRITER_SCHEMA, "medium", 16000)
+    return ask_json(WRITER_MODEL, WRITER_SYSTEM, "\n\n".join(parts), WRITER_SCHEMA, "medium", 16000,
+                    fallback=WRITER_FALLBACK)

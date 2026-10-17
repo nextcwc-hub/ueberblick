@@ -23,6 +23,7 @@ MAX_FIRST_RUN = 12 if FREE else 24
 MAX_PER_DAY = int(os.environ.get("MAX_WRITES_PER_DAY") or (200 if FREE else 150))
 WEATHER_EVERY_H = 3
 KEEP_H = 72
+ARCHIVE_DAYS = 30
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 
 
@@ -58,7 +59,7 @@ def main(out: Path):
     has_key = llm.has_key()
 
     # ---- Börse (jeder Lauf, ohne KI)
-    m = media.markets()
+    m = media.markets(v1 / "m", load(v1 / "markets.json", {}))
     if m["items"]:
         save(v1 / "markets.json", m)
     print(f"Märkte: {len(m['items'])}")
@@ -135,6 +136,8 @@ def main(out: Path):
     print(f"Schreibe {len(todo)} Artikel ({len(cands)} Kandidaten)")
 
     mbrief = media.markets_brief(m) if m["items"] else ""
+    codes = {x["sym"] for x in m["items"]}
+    alist = "MARKTWERTE für assets (Kürzel = Name): " + ", ".join(f"{x['sym']} = {x['name']}" for x in m["items"])
 
     def job(ev):
         its = sorted(ev["items"], key=lambda i: (i["s"] not in sources.OPEN_SOURCES, -i["p"]))[:8]
@@ -148,6 +151,8 @@ def main(out: Path):
         prev = stories.get(ev["id"])
         imgs = [] if prev and prev.get("img") else media.commons_candidates(ev.get("iq", ""))
         extra = mbrief if ev["cat"] in ("boerse", "wirtschaft") else ""
+        if m["items"] and ev["cat"] in ("boerse", "wirtschaft", "digital", "ausland", "inland"):
+            extra += "\n\n" + alist
         return ev, llm.write(ev, reports, prev, imgs, extra, now_str()), imgs
 
     with ThreadPoolExecutor(1 if FREE else 4) as ex:
@@ -156,6 +161,7 @@ def main(out: Path):
     for ev, res, imgs in results:
         if not res:
             continue
+        res["assets"] = [a for a in res.get("assets", []) if a in codes][:6]
         publish(v1, stories, ev, res, imgs, now)
         ev.update(written=True, written_n=len(ev["items"]), last_write=now,
                   cat=res["cat"], imp=max(1, min(10, res["imp"])))
@@ -196,6 +202,7 @@ def publish(v1: Path, stories: dict, ev: dict, res: dict, imgs: list, now: float
         "imp": max(1, min(10, res["imp"])), "srcn": len(srcs), "sources": srcs[:12],
         "loc": res["location"].strip(), "ver": prev.get("ver", 0) + 1,
         "tone": res.get("tone", "neutral"),
+        "assets": res.get("assets", []),
     }
     save(v1 / "a" / f"{ev['id']}.json", {
         "id": ev["id"], "sections": res["sections"], "facts": res["facts"],
@@ -203,11 +210,37 @@ def publish(v1: Path, stories: dict, ev: dict, res: dict, imgs: list, now: float
     })
 
 
+def archive(v1: Path, stories: dict, now: float):
+    """Tagesarchiv für den Zeitstrahl: v1/days/<datum>.json + v1/days.json"""
+    days = v1 / "days"
+    by_day = {}
+    for s in stories.values():
+        d = datetime.fromtimestamp(s["created"], TZ).strftime("%Y-%m-%d")
+        by_day.setdefault(d, []).append(s)
+    for d, lst in by_day.items():
+        p = days / f"{d}.json"
+        old = {s["id"]: s for s in load(p, {"stories": []})["stories"]}
+        old.update({s["id"]: s for s in lst})
+        save(p, {"date": d, "stories": sorted(old.values(), key=lambda s: -s["created"])})
+    cutoff = datetime.fromtimestamp(now - ARCHIVE_DAYS * 86400, TZ).strftime("%Y-%m-%d")
+    listing = []
+    for p in sorted(days.glob("*.json")):
+        if p.stem < cutoff:
+            p.unlink()
+            continue
+        listing.append({"date": p.stem, "n": len(load(p, {"stories": []})["stories"])})
+    save(v1 / "days.json", {"days": listing[::-1]})
+    keep = {s["id"] for p in days.glob("*.json") for s in load(p, {"stories": []})["stories"]}
+    for p in (v1 / "a").glob("*.json"):
+        if p.stem not in keep and p.stem not in stories:
+            p.unlink()
+
+
 def finish(out: Path, v1: Path, state: dict, stories: dict, now: float):
+    archive(v1, stories, now)
     for sid, s in list(stories.items()):
         if now - s["updated"] > KEEP_H * 3600:
             del stories[sid]
-            (v1 / "a" / f"{sid}.json").unlink(missing_ok=True)
     state["events"] = {k: e for k, e in state["events"].items() if now - e["last_item"] < KEEP_H * 3600}
     state["seen"] = {k: t for k, t in state["seen"].items() if now - t < 48 * 3600}
     state["writes"] = dict(sorted(state["writes"].items())[-7:])
