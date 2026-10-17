@@ -10,7 +10,9 @@ import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await app.init();
+  try {
+    await app.init().timeout(const Duration(seconds: 4));
+  } catch (_) {}
   runApp(const UeberblickApp());
 }
 
@@ -52,8 +54,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    app.refresh(applyNow: true);
-    app.startPolling();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      app.refresh(applyNow: true);
+      app.startPolling();
+    });
   }
 
   @override

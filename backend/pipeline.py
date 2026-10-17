@@ -92,7 +92,7 @@ def main(out: Path):
         for ne in res["new_events"]:
             eid = "e" + hashlib.sha1(f"{ne['key']}{ne['label']}{now}".encode()).hexdigest()[:10]
             ev = {"id": eid, "cat": ne["cat"], "imp": max(1, min(10, ne["imp"])), "label": ne["label"],
-                  "iq": ne["image_query"], "items": [], "created": now, "last_item": now,
+                  "iq": ne["image_query"], "tone": ne.get("tone", "neutral"), "items": [], "created": now, "last_item": now,
                   "written": False, "written_n": 0, "last_write": 0}
             keymap[ne["key"]] = ev
         for a in res["items"]:
@@ -122,7 +122,7 @@ def main(out: Path):
     for ev in events.values():
         n_src = len(distinct_sources(ev))
         if not ev["written"]:
-            ok = ev["imp"] >= 6 or (ev["imp"] >= 4 and n_src >= 2) or n_src >= 3
+            ok = ev["imp"] >= 6 or (ev["imp"] >= 4 and (n_src >= 2 or ev.get("tone") == "positiv")) or n_src >= 3
             if ok and now - ev["last_item"] < 12 * 3600:
                 cands.append((ev["imp"] * 10 + 5 * min(n_src, 6) + 15, ev))
         else:
@@ -195,6 +195,7 @@ def publish(v1: Path, stories: dict, ev: dict, res: dict, imgs: list, now: float
         "created": prev.get("created", int(now)), "updated": int(now),
         "imp": max(1, min(10, res["imp"])), "srcn": len(srcs), "sources": srcs[:12],
         "loc": res["location"].strip(), "ver": prev.get("ver", 0) + 1,
+        "tone": res.get("tone", "neutral"),
     }
     save(v1 / "a" / f"{ev['id']}.json", {
         "id": ev["id"], "sections": res["sections"], "facts": res["facts"],

@@ -124,6 +124,7 @@ Für neue Ereignisse:
 - cat: inland (Deutschland-Politik/Gesellschaft), ausland, wirtschaft, boerse (Märkte, Kurse, Unternehmenszahlen, Geldanlage, Zinsen), wissen (Wissenschaft, Gesundheit, Umwelt, Klima), digital (Technik, Internet, KI, Datenschutz), investigativ (NUR exklusive Recherchen/Enthüllungen von Medien), sport, wetter.
 - imp (Bedeutung 1-10): 10 historisch; 8-9 Top-Nachricht des Tages; 6-7 wichtig, breites Interesse; 4-5 berichtenswert, eher speziell oder regional; 1-3 Randnotiz.
 - label: kurze, neutrale deutsche Arbeitsüberschrift.
+- tone: "positiv" (gute Nachricht: Fortschritt, Erfolg, Rettung, Einigung, Durchbruch), "negativ" (belastend: Krieg, Gewalt, Tod, Katastrophe, Krise) oder "neutral".
 - image_query: englische Suchbegriffe für ein passendes, NICHT irreführendes Foto auf Wikimedia Commons: ein Ort, Gebäude, eine Institution, ein Symbolmotiv oder ein Porträt einer zentral beteiligten Person (z. B. "Reichstag building Berlin", "Federal Constitutional Court Karlsruhe", "Friedrich Merz", "Frankfurt Stock Exchange"). Keine Begriffe, die ein konkretes Unglück oder Opfer zeigen würden.
 
 Bei bestehenden Ereignissen darfst du unter "reassess" die Bedeutung anpassen, wenn neue Meldungen eine deutliche Eskalation oder Entspannung zeigen."""
@@ -146,9 +147,10 @@ CLUSTER_SCHEMA = {
                 "cat": {"type": "string", "enum": CATS},
                 "imp": {"type": "integer"},
                 "label": {"type": "string"},
+                "tone": {"type": "string", "enum": ["positiv", "neutral", "negativ"]},
                 "image_query": {"type": "string"},
             },
-            "required": ["key", "cat", "imp", "label", "image_query"], "additionalProperties": False}},
+            "required": ["key", "cat", "imp", "label", "tone", "image_query"], "additionalProperties": False}},
         "reassess": {"type": "array", "items": {
             "type": "object",
             "properties": {"id": {"type": "string"}, "imp": {"type": "integer"}},
@@ -189,7 +191,8 @@ Ausgabe:
 - outlook: wie es weitergeht (Termine, nächste Schritte), falls bekannt, sonst leer.
 - cat, imp (1-10): Kategorie und Bedeutung (siehe Vorgabe; bei Bedarf korrigieren).
 - image: Index des passendsten Bildkandidaten oder -1, wenn keiner wirklich passt. Ein Bild passt nur, wenn es das Thema zeigt, ohne in die Irre zu führen (kein Foto eines anderen Ereignisses, das wie das aktuelle wirkt; Porträts nur von zentral beteiligten Personen). Im Zweifel -1.
-- location: Hauptort (Stadt/Land) oder leer."""
+- location: Hauptort (Stadt/Land) oder leer.
+- tone: Wirkung der Nachricht auf Leser. "positiv" = überwiegend gute Nachricht (Fortschritt, Erfolg, Rettung, Einigung, Durchbruch, Verbesserung, sportlicher Erfolg, erfreuliche Entdeckung). "negativ" = überwiegend belastend (Krieg, Gewalt, Tod, Katastrophe, Unglück, Verbrechen, schwere Krise, Verschlechterung). Sonst "neutral" (sachliche Politik, Zahlen ohne klare Richtung, gemischte Lage)."""
 
 WRITER_SCHEMA = {
     "type": "object",
@@ -214,9 +217,10 @@ WRITER_SCHEMA = {
         "imp": {"type": "integer"},
         "image": {"type": "integer"},
         "location": {"type": "string"},
+        "tone": {"type": "string", "enum": ["positiv", "neutral", "negativ"]},
     },
     "required": ["title", "teaser", "summary", "sections", "facts", "positions",
-                 "outlook", "cat", "imp", "image", "location"],
+                 "outlook", "cat", "imp", "image", "location", "tone"],
     "additionalProperties": False,
 }
 

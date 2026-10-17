@@ -13,8 +13,18 @@ const feedBase = 'https://nextcwc-hub.github.io/ueberblick/v1/';
 
 enum SortMode { newest, relevance, sources }
 
+enum Mood { all, positive, noNegative, negative }
+
+const moodLabels = {
+  Mood.all: 'Alle Nachrichten',
+  Mood.positive: 'Nur positive',
+  Mood.noNegative: 'Ohne negative',
+  Mood.negative: 'Nur negative',
+};
+
 class AppState extends ChangeNotifier {
-  late SharedPreferences _p;
+  SharedPreferences? _prefs;
+  SharedPreferences get _p => _prefs!;
   Directory? _dir;
 
   List<Story> stories = [];
@@ -32,19 +42,23 @@ class AppState extends ChangeNotifier {
   double textScale = 1.0;
   bool detailed = false;
   SortMode sort = SortMode.newest;
+  Mood mood = Mood.all;
   String weatherCity = 'Berlin';
   Map<String, dynamic> saved = {}; // id -> {story, article}
 
   Timer? _timer;
 
   Future<void> init() async {
-    _p = await SharedPreferences.getInstance();
+    _prefs = await SharedPreferences.getInstance();
     themeMode = ThemeMode.values[_p.getInt('theme') ?? 0];
     textScale = _p.getDouble('textScale') ?? 1.0;
     detailed = _p.getBool('detailed') ?? false;
     sort = SortMode.values[_p.getInt('sort') ?? 0];
+    mood = Mood.values[_p.getInt('mood') ?? 0];
     weatherCity = _p.getString('city') ?? 'Berlin';
-    saved = jsonDecode(_p.getString('saved') ?? '{}');
+    try {
+      saved = Map<String, dynamic>.from(jsonDecode(_p.getString('saved') ?? '{}'));
+    } catch (_) {}
     try {
       _dir = await getApplicationSupportDirectory();
       final f = File('${_dir!.path}/index.json');
@@ -128,7 +142,7 @@ class AppState extends ChangeNotifier {
   }
 
   List<Story> filtered(String? cat, {String query = ''}) {
-    var l = stories.where((s) => cat == null || s.cat == cat).toList();
+    var l = stories.where((s) => (cat == null || s.cat == cat) && moodOk(s)).toList();
     if (query.isNotEmpty) {
       final q = query.toLowerCase();
       l = l
@@ -148,6 +162,13 @@ class AppState extends ChangeNotifier {
     }
     return l;
   }
+
+  bool moodOk(Story s) => switch (mood) {
+        Mood.all => true,
+        Mood.positive => s.tone == 'positiv',
+        Mood.noNegative => s.tone != 'negativ',
+        Mood.negative => s.tone == 'negativ',
+      };
 
   Story? byId(String id) {
     for (final s in stories) {
@@ -209,6 +230,12 @@ class AppState extends ChangeNotifier {
   void setSort(SortMode m) {
     sort = m;
     _p.setInt('sort', m.index);
+    notifyListeners();
+  }
+
+  void setMood(Mood m) {
+    mood = m;
+    _p.setInt('mood', m.index);
     notifyListeners();
   }
 

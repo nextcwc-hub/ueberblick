@@ -20,7 +20,7 @@ class Source {
 
 class Story {
   final Map<String, dynamic> raw;
-  final String id, cat, title, teaser, loc;
+  final String id, cat, title, teaser, loc, tone;
   final List<String> summary;
   final Img? img;
   final DateTime created, updated;
@@ -33,6 +33,7 @@ class Story {
         title = raw['title'] ?? '',
         teaser = raw['teaser'] ?? '',
         loc = raw['loc'] ?? '',
+        tone = raw['tone'] ?? 'neutral',
         summary = List<String>.from(raw['summary'] ?? const []),
         img = raw['img'] == null ? null : Img(raw['img']),
         created = DateTime.fromMillisecondsSinceEpoch((raw['created'] as num).toInt() * 1000),

@@ -35,6 +35,15 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
           ),
+          const SectionLabel('Nachrichtenauswahl'),
+          RadioGroup<Mood>(
+            groupValue: app.mood,
+            onChanged: (v) => app.setMood(v!),
+            child: Column(children: [
+              for (final m in Mood.values)
+                RadioListTile<Mood>(value: m, title: Text(moodLabels[m]!, style: sans(context, 15)), dense: true),
+            ]),
+          ),
           const SectionLabel('Darstellung'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
