@@ -18,7 +18,7 @@ import sources
 
 TZ = ZoneInfo("Europe/Berlin")
 FREE = llm.PROVIDER == "gemini"
-MAX_PER_RUN = int(os.environ.get("MAX_WRITES_PER_RUN") or (5 if FREE else 8))
+MAX_PER_RUN = int(os.environ.get("MAX_WRITES_PER_RUN") or 8)
 MAX_FIRST_RUN = 12 if FREE else 24
 MAX_PER_DAY = int(os.environ.get("MAX_WRITES_PER_DAY") or (200 if FREE else 150))
 WEATHER_EVERY_H = 3
@@ -120,19 +120,33 @@ def main(out: Path):
 
     # ---- Auswahl: was wird (neu) geschrieben?
     cands = []
+    # Ausgewogene Mischung: Kategorien mit wenigen aktuellen Artikeln bekommen Vorrang
+    recent = {}
+    for s in stories.values():
+        if now - s["updated"] < 12 * 3600:
+            recent[s["cat"]] = recent.get(s["cat"], 0) + 1
     for ev in events.values():
         n_src = len(distinct_sources(ev))
         if not ev["written"]:
             ok = ev["imp"] >= 6 or (ev["imp"] >= 4 and (n_src >= 2 or ev.get("tone") == "positiv")) or n_src >= 3
             if ok and now - ev["last_item"] < 12 * 3600:
-                cands.append((ev["imp"] * 10 + 5 * min(n_src, 6) + 15, ev))
+                have = recent.get(ev["cat"], 0)
+                bonus = 25 if have < 3 else (10 if have < 6 else 0)
+                cands.append((ev["imp"] * 10 + 5 * min(n_src, 6) + 15 + bonus, ev))
         else:
             added = len(ev["items"]) - ev["written_n"]
             if added > 0 and now - ev["last_write"] > 40 * 60 and (added >= 2 or ev["imp"] >= 7):
                 cands.append((ev["imp"] * 10 + 5 * min(added, 6), ev))
     cands.sort(key=lambda c: -c[0])
     budget = min(MAX_FIRST_RUN if first_run else MAX_PER_RUN, MAX_PER_DAY - state["writes"].get(today, 0))
-    todo = [ev for _, ev in cands[:max(0, budget)]]
+    todo, per_cat = [], {}
+    for _, ev in cands:
+        if len(todo) >= max(0, budget):
+            break
+        if per_cat.get(ev["cat"], 0) >= 3:  # höchstens 3 Artikel einer Kategorie pro Lauf
+            continue
+        per_cat[ev["cat"]] = per_cat.get(ev["cat"], 0) + 1
+        todo.append(ev)
     print(f"Schreibe {len(todo)} Artikel ({len(cands)} Kandidaten)")
 
     mbrief = media.markets_brief(m) if m["items"] else ""
@@ -144,7 +158,7 @@ def main(out: Path):
         reports, fetched = [], 0
         for i in its:
             r = {"s": i["s"], "t": i["t"], "d": fresh.get(i["h"], {}).get("d", "")}
-            if fetched < 3:
+            if fetched < 4:
                 r["full"] = sources.fetch_text(i["u"])
                 fetched += 1 if r["full"] else 0
             reports.append(r)
@@ -166,6 +180,14 @@ def main(out: Path):
         ev.update(written=True, written_n=len(ev["items"]), last_write=now,
                   cat=res["cat"], imp=max(1, min(10, res["imp"])))
         state["writes"][today] = state["writes"].get(today, 0) + 1
+
+    # ---- Stimmung für ältere Artikel ohne Einordnung nachtragen
+    missing = [s for s in stories.values() if "tone" not in s][:30]
+    if missing:
+        tones = llm.tones([{"id": s["id"], "title": s["title"], "teaser": s["teaser"]} for s in missing])
+        for sid, tone in (tones or {}).items():
+            if sid in stories:
+                stories[sid]["tone"] = tone
 
     # ---- Wetterbericht Deutschland
     if now - state.get("weather_at", 0) > WEATHER_EVERY_H * 3600:

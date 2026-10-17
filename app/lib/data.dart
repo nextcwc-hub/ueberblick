@@ -280,7 +280,7 @@ class AppState extends ChangeNotifier {
   Future<MarketDetail?> marketDetail(String sym) async {
     if (_details[sym] != null) return _details[sym];
     try {
-      final j = await _get('m/${sym.replaceAll(RegExp(r'[^A-Za-z0-9.-]'), '_')}.json', cacheSec: 60);
+      final j = await _get('m/${sym.replaceAll(RegExp(r'[^A-Za-z0-9-]'), '_')}.json', cacheSec: 60);
       if (j != null) return _details[sym] = MarketDetail(j);
     } catch (_) {}
     return null;

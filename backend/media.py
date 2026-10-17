@@ -108,7 +108,7 @@ HIST_EVERY = 3 * 3600
 
 
 def safe(sym: str) -> str:
-    return re.sub(r"[^A-Za-z0-9.-]", "_", sym)
+    return re.sub(r"[^A-Za-z0-9-]", "_", sym)  # ohne Punkte – "CON.DE" wäre unter Windows ein reservierter Name
 
 
 def _pts(res):
@@ -178,7 +178,9 @@ def _summary(sym, name, kind, alias, meta, intraday):
 def markets(out_dir, prev: dict) -> dict:
     """Schreibt Detaildateien nach out_dir/<sym>.json und gibt die Übersicht zurück."""
     now = time.time()
-    need_hist = now - prev.get("hist_at", 0) > HIST_EVERY
+    all_syms = [i[0] for i in INSTRUMENTS] + [s for s, _ in STOCKS]
+    need_hist = (now - prev.get("hist_at", 0) > HIST_EVERY
+                 or any(not (out_dir / f"{safe(s)}.json").exists() for s in all_syms))
     items, details = [], {}
 
     def main_inst(entry):
@@ -227,6 +229,10 @@ def markets(out_dir, prev: dict) -> dict:
                 d["week"], d["history"] = [], []
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps({"sym": sym, **d}, separators=(",", ":")), encoding="utf-8")
+    keep = {f"{safe(s)}.json" for s in details}
+    for p in out_dir.glob("*.json"):
+        if p.name not in keep and not any(p.name == f"{safe(s)}.json" for s in all_syms):
+            p.unlink()
     return {"updated": int(now), "hist_at": int(now) if need_hist else prev.get("hist_at", 0), "items": items}
 
 

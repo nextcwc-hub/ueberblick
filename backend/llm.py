@@ -195,7 +195,7 @@ Ausgabe:
 - title: sachliche Überschrift, max. 80 Zeichen, kein Clickbait, keine Frage.
 - teaser: ein Satz, max. 200 Zeichen – das Wichtigste auf einen Blick.
 - summary: 3-5 Stichpunkte (je max. 25 Wörter), die zusammen die Kurzfassung bilden und ohne den Rest verständlich sind.
-- sections: die ausführliche Fassung in 3-6 Abschnitten mit kurzer Zwischenüberschrift (h) und Text (text; Absätze mit Leerzeile trennen). Beginne mit dem Kern (Was ist passiert?), dann Details, Hintergrund/Einordnung, Reaktionen. Länge nach Informationslage: 250-900 Wörter. Bei dünner Faktenlage lieber kürzer, niemals auffüllen.
+- sections: die ausführliche Fassung in 3-6 Abschnitten mit kurzer Zwischenüberschrift (h) und Text (text; Absätze mit Leerzeile trennen). Beginne mit dem Kern (Was ist passiert?), dann Details, Hintergrund/Einordnung, Reaktionen. Ziel: 400-900 Wörter. Nutze alle belastbaren Details aus den Berichten (Zahlen, Hintergründe, Zusammenhänge, Reaktionen, Vorgeschichte). Nur wenn die Faktenlage wirklich dünn ist, kürzer – niemals mit Floskeln auffüllen.
 - facts: 0-6 Kerndaten (k: Bezeichnung, v: Wert), nur wörtlich aus den Quellen belegte Zahlen/Daten.
 - positions: 0-4 Positionen beteiligter Seiten (who, view) – nur bei Kontroversen.
 - outlook: wie es weitergeht (Termine, nächste Schritte), falls bekannt, sonst leer.
@@ -262,3 +262,22 @@ def write(event: dict, reports: list[dict], previous: dict | None, images: list[
         parts.append("BILDKANDIDATEN: keine (image = -1)")
     return ask_json(WRITER_MODEL, WRITER_SYSTEM, "\n\n".join(parts), WRITER_SCHEMA, "medium", 16000,
                     fallback=WRITER_FALLBACK)
+
+
+TONE_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"id": {"type": "string"}, "tone": {"type": "string", "enum": ["positiv", "neutral", "negativ"]}},
+        "required": ["id", "tone"], "additionalProperties": False}}},
+    "required": ["items"], "additionalProperties": False,
+}
+
+
+def tones(items: list[dict]) -> dict | None:
+    """Ordnet Meldungen nachträglich als positiv, neutral oder negativ ein."""
+    system = ("Ordne jede Nachricht nach ihrer Wirkung auf Leser ein: positiv (Fortschritt, Erfolg, Rettung, Einigung, "
+              "Durchbruch), negativ (Krieg, Gewalt, Tod, Katastrophe, Verbrechen, schwere Krise) oder neutral.")
+    user = "\n".join(f"{x['id']} | {x['title']} | {x['teaser']}" for x in items)
+    res = ask_json(CLUSTER_MODEL, system, user, TONE_SCHEMA, "low", 4000)
+    return {x["id"]: x["tone"] for x in res["items"]} if res else None

@@ -117,7 +117,7 @@ def fetch_all(max_age_h: float) -> list[dict]:
     return items
 
 
-def fetch_text(url: str, limit: int = 4000) -> str:
+def fetch_text(url: str, limit: int = 5000) -> str:
     """Volltext eines Artikels als Faktengrundlage (wird nicht veröffentlicht)."""
     import trafilatura
     try:
