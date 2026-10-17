@@ -11,11 +11,12 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
 
@@ -53,3 +54,13 @@ jobs:
           git add -A
           git commit -q -m "Update $(date -u +%FT%TZ)"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
+
+      # GitHubs Zeitplan startet oft verspätet oder gar nicht – deshalb plant jeder Lauf den nächsten selbst.
+      - name: Nächsten Lauf planen
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          waiting=$(gh run list -R "${{ github.repository }}" -w pipeline.yml --json status --jq '[.[] | select(.status=="queued" or .status=="pending" or .status=="waiting")] | length')
+          if [ "$waiting" = "0" ]; then gh workflow run pipeline.yml -R "${{ github.repository }}" --ref main; fi
