@@ -2,10 +2,14 @@ import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'data.dart';
 import 'models.dart';
 import 'theme.dart';
+
+/// Für Bildschirmfotos im Test ohne Plugin-Cache.
+bool useImageCache = true;
 
 /// Bild oder – falls keins vorhanden – eine ruhige, typografische Kategorie-Fläche.
 class StoryImage extends StatelessWidget {
@@ -16,15 +20,18 @@ class StoryImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fallback = CatArt(s.cat, large: large, seed: s.id.hashCode);
     final child = s.img == null
-        ? CatArt(s.cat, large: large, seed: s.id.hashCode)
-        : CachedNetworkImage(
-            imageUrl: s.img!.url,
-            fit: BoxFit.cover,
-            fadeInDuration: const Duration(milliseconds: 180),
-            placeholder: (_, _) => Container(color: Theme.of(context).colorScheme.surfaceContainer),
-            errorWidget: (_, _, _) => CatArt(s.cat, large: large, seed: s.id.hashCode),
-          );
+        ? fallback
+        : useImageCache
+            ? CachedNetworkImage(
+                imageUrl: s.img!.url,
+                fit: BoxFit.cover,
+                fadeInDuration: const Duration(milliseconds: 180),
+                placeholder: (_, _) => Container(color: Theme.of(context).colorScheme.surfaceContainer),
+                errorWidget: (_, _, _) => fallback,
+              )
+            : Image.network(s.img!.url, fit: BoxFit.cover, errorBuilder: (_, _, _) => fallback);
     return ClipRRect(borderRadius: BorderRadius.circular(radius), child: child);
   }
 }
@@ -194,9 +201,13 @@ class ModeSwitch extends StatelessWidget {
     Widget seg(String label, bool value) {
       final sel = detailed == value;
       return Expanded(
-        child: GestureDetector(
+        // Listener reagiert sofort beim Antippen – auch innerhalb des wischbaren Artikel-Pagers.
+        child: Listener(
           behavior: HitTestBehavior.opaque,
-          onTap: () => onChanged(value),
+          onPointerDown: (_) {
+            if (!sel) HapticFeedback.selectionClick();
+            onChanged(value);
+          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
@@ -214,7 +225,7 @@ class ModeSwitch extends StatelessWidget {
     }
 
     return Container(
-      height: 38,
+      height: 42,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(color: cs.surfaceContainer, borderRadius: BorderRadius.circular(9)),
       child: Row(children: [seg('Kurz', false), seg('Ausführlich', true)]),
@@ -235,7 +246,9 @@ class Sparkline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (pts.length < 2) return const SizedBox();
-    if (!interactive) return CustomPaint(painter: _SparkPainter(pts, baseline, color, fill, null, context));
+    if (!interactive) {
+      return CustomPaint(size: Size.infinite, painter: _SparkPainter(pts, baseline, color, fill, null, context));
+    }
     return _InteractiveSpark(this);
   }
 }

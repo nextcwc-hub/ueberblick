@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +13,14 @@ import 'models.dart';
 
 const feedBase = 'https://nextcwc-hub.github.io/ueberblick/v1/';
 
-enum SortMode { newest, relevance, sources }
+enum SortMode { newest, relevance, sources, timeline }
+
+const sortLabels = {
+  SortMode.newest: 'Neueste',
+  SortMode.relevance: 'Wichtigste',
+  SortMode.sources: 'Meistberichtet',
+  SortMode.timeline: 'Zeitstrahl',
+};
 
 enum Mood { all, positive, noNegative, negative }
 
@@ -22,50 +31,75 @@ const moodLabels = {
   Mood.negative: 'Nur negative',
 };
 
+const defaultPlace = Place('Berlin', '10115', 'Berlin', 52.532, 13.385);
+
+/// Darstellung (Theme, Schriftgröße) – getrennt, damit nicht bei jeder Datenänderung die ganze App neu aufgebaut wird.
+class Appearance extends ChangeNotifier {
+  ThemeMode themeMode = ThemeMode.system;
+  double textScale = 1.0;
+  void changed() => notifyListeners();
+}
+
 class AppState extends ChangeNotifier {
   SharedPreferences? _prefs;
-  SharedPreferences get _p => _prefs!;
   Directory? _dir;
+  final appearance = Appearance();
 
   List<Story> stories = [];
   List<Story> pending = []; // neu eingetroffen, noch nicht eingeblendet
+  List<Story>? _pendingAll;
   DateTime? generated;
   bool loading = false;
   String? error;
   List<Market> markets = [];
   DateTime? marketsUpdated;
+  DateTime _marketsFetched = DateTime(2000);
   final Map<String, Article> _articles = {};
   final Map<String, Future<Article?>> _inflight = {};
+  final Map<String, MarketDetail> _details = {};
+  final Map<String, List<Story>> _days = {};
+  List<(String, int)> days = [];
 
   // Einstellungen
-  ThemeMode themeMode = ThemeMode.system;
-  double textScale = 1.0;
   bool detailed = false;
   SortMode sort = SortMode.newest;
   Mood mood = Mood.all;
-  String weatherCity = 'Berlin';
+  Place place = defaultPlace;
+  List<Place> recentPlaces = [];
   Map<String, dynamic> saved = {}; // id -> {story, article}
 
   Timer? _timer;
 
+  ThemeMode get themeMode => appearance.themeMode;
+  double get textScale => appearance.textScale;
+
   Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    themeMode = ThemeMode.values[_p.getInt('theme') ?? 0];
-    textScale = _p.getDouble('textScale') ?? 1.0;
-    detailed = _p.getBool('detailed') ?? false;
-    sort = SortMode.values[_p.getInt('sort') ?? 0];
-    mood = Mood.values[_p.getInt('mood') ?? 0];
-    weatherCity = _p.getString('city') ?? 'Berlin';
+    final p = _prefs = await SharedPreferences.getInstance();
+    appearance.themeMode = ThemeMode.values[p.getInt('theme') ?? 0];
+    appearance.textScale = p.getDouble('textScale') ?? 1.0;
+    detailed = p.getBool('detailed') ?? false;
+    sort = SortMode.values[min(p.getInt('sort') ?? 0, SortMode.values.length - 1)];
+    mood = Mood.values[p.getInt('mood') ?? 0];
     try {
-      saved = Map<String, dynamic>.from(jsonDecode(_p.getString('saved') ?? '{}'));
+      final pl = p.getString('place');
+      if (pl != null) place = Place.fromJson(jsonDecode(pl));
+      recentPlaces = [for (final x in jsonDecode(p.getString('recentPlaces') ?? '[]')) Place.fromJson(x)];
+    } catch (_) {}
+    try {
+      saved = Map<String, dynamic>.from(jsonDecode(p.getString('saved') ?? '{}'));
     } catch (_) {}
     try {
       _dir = await getApplicationSupportDirectory();
       final f = File('${_dir!.path}/index.json');
-      if (await f.exists()) _applyIndex(jsonDecode(await f.readAsString()), initial: true);
+      if (await f.exists()) _applyIndex(jsonDecode(await f.readAsString()), applyNow: true);
       final m = File('${_dir!.path}/markets.json');
       if (await m.exists()) _applyMarkets(jsonDecode(await m.readAsString()));
     } catch (_) {}
+  }
+
+  void _set(void Function(SharedPreferences p) f) {
+    final p = _prefs;
+    if (p != null) f(p);
   }
 
   void startPolling() {
@@ -75,8 +109,8 @@ class AppState extends ChangeNotifier {
 
   void stopPolling() => _timer?.cancel();
 
-  Future<Map<String, dynamic>?> _get(String path) async {
-    final t = DateTime.now().millisecondsSinceEpoch ~/ 30000;
+  Future<Map<String, dynamic>?> _get(String path, {int cacheSec = 30}) async {
+    final t = DateTime.now().millisecondsSinceEpoch ~/ (cacheSec * 1000);
     final r = await http.get(Uri.parse('$feedBase$path?t=$t')).timeout(const Duration(seconds: 15));
     if (r.statusCode != 200) return null;
     return jsonDecode(utf8.decode(r.bodyBytes));
@@ -93,11 +127,7 @@ class AppState extends ChangeNotifier {
         if (_dir != null) File('${_dir!.path}/index.json').writeAsString(jsonEncode(idx));
         error = null;
       }
-      final m = await _get('markets.json');
-      if (m != null) {
-        _applyMarkets(m);
-        if (_dir != null) File('${_dir!.path}/markets.json').writeAsString(jsonEncode(m));
-      }
+      if (DateTime.now().difference(_marketsFetched).inMinutes >= 3) await refreshMarkets(notify: false);
     } catch (e) {
       if (stories.isEmpty) error = 'Keine Verbindung. Bitte später erneut versuchen.';
     }
@@ -105,31 +135,41 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _applyIndex(Map<String, dynamic> j, {bool initial = false, bool applyNow = true}) {
+  Future<void> refreshMarkets({bool notify = true}) async {
+    try {
+      final m = await _get('markets.json', cacheSec: 60);
+      if (m == null) return;
+      _marketsFetched = DateTime.now();
+      _applyMarkets(m);
+      _details.clear();
+      if (_dir != null) File('${_dir!.path}/markets.json').writeAsString(jsonEncode(m));
+      if (notify) notifyListeners();
+    } catch (_) {}
+  }
+
+  void _applyIndex(Map<String, dynamic> j, {bool applyNow = true}) {
     generated = DateTime.fromMillisecondsSinceEpoch(((j['generated'] ?? 0) as num).toInt() * 1000);
     final fresh = [for (final s in (j['stories'] ?? const [])) Story(Map<String, dynamic>.from(s))];
-    // geänderte Artikel neu laden
     final old = {for (final s in stories) s.id: s.ver};
     for (final s in fresh) {
       if (old.containsKey(s.id) && old[s.id] != s.ver) _articles.remove(s.id);
     }
-    if (initial || applyNow || stories.isEmpty) {
+    _days.remove(_dayKey(DateTime.now()));
+    if (applyNow || stories.isEmpty) {
       stories = fresh;
       pending = [];
+      _pendingAll = null;
     } else {
       final known = {for (final s in stories) s.id};
-      final newOnes = fresh.where((s) => !known.contains(s.id)).toList();
-      // Aktualisierungen bekannter Meldungen sofort übernehmen, neue als Hinweis
       final byId = {for (final s in fresh) s.id: s};
       stories = [for (final s in stories) if (byId.containsKey(s.id)) byId[s.id]!];
-      pending = newOnes;
-      if (newOnes.isNotEmpty) _pendingAll = fresh;
+      pending = fresh.where((s) => !known.contains(s.id)).toList();
+      _pendingAll = pending.isEmpty ? null : fresh;
     }
   }
 
-  List<Story>? _pendingAll;
-
   void applyPending() {
+    if (_pendingAll == null && pending.isEmpty) return;
     if (_pendingAll != null) stories = _pendingAll!;
     _pendingAll = null;
     pending = [];
@@ -141,8 +181,15 @@ class AppState extends ChangeNotifier {
     marketsUpdated = DateTime.fromMillisecondsSinceEpoch(((j['updated'] ?? 0) as num).toInt() * 1000);
   }
 
-  List<Story> filtered(String? cat, {String query = ''}) {
-    var l = stories.where((s) => (cat == null || s.cat == cat) && moodOk(s)).toList();
+  bool moodOk(Story s) => switch (mood) {
+        Mood.all => true,
+        Mood.positive => s.tone == 'positiv',
+        Mood.noNegative => s.tone != 'negativ',
+        Mood.negative => s.tone == 'negativ',
+      };
+
+  List<Story> filtered(String? cat, {String query = '', List<Story>? from}) {
+    var l = (from ?? stories).where((s) => (cat == null || s.cat == cat) && moodOk(s)).toList();
     if (query.isNotEmpty) {
       final q = query.toLowerCase();
       l = l
@@ -159,16 +206,43 @@ class AppState extends ChangeNotifier {
         l.sort((a, b) => b.relevance.compareTo(a.relevance));
       case SortMode.sources:
         l.sort((a, b) => b.srcn != a.srcn ? b.srcn.compareTo(a.srcn) : b.updated.compareTo(a.updated));
+      case SortMode.timeline:
+        l.sort((a, b) => b.created.compareTo(a.created));
     }
     return l;
   }
 
-  bool moodOk(Story s) => switch (mood) {
-        Mood.all => true,
-        Mood.positive => s.tone == 'positiv',
-        Mood.noNegative => s.tone != 'negativ',
-        Mood.negative => s.tone == 'negativ',
-      };
+  // ---------- Zeitstrahl / Archiv
+  static String _dayKey(DateTime d) => '${d.year}-${two(d.month)}-${two(d.day)}';
+
+  Future<void> loadDays() async {
+    try {
+      final j = await _get('days.json', cacheSec: 120);
+      if (j == null) return;
+      days = [for (final d in j['days']) (d['date'] as String, (d['n'] as num).toInt())];
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  List<Story>? cachedDay(DateTime d) => _days[_dayKey(d)];
+
+  Future<List<Story>> dayStories(DateTime d) async {
+    final key = _dayKey(d);
+    if (_days[key] != null) return _days[key]!;
+    try {
+      final j = await _get('days/$key.json', cacheSec: 120);
+      final l = j == null ? <Story>[] : [for (final s in j['stories']) Story(Map<String, dynamic>.from(s))];
+      // Aktuelle Fassungen aus dem Index bevorzugen
+      final cur = {for (final s in stories) s.id: s};
+      final ids = {for (final s in l) s.id};
+      return _days[key] = [
+        for (final s in l) cur[s.id] ?? s,
+        for (final s in stories) if (_dayKey(s.created) == key && !ids.contains(s.id)) s,
+      ];
+    } catch (_) {
+      return stories.where((s) => _dayKey(s.created) == key).toList();
+    }
+  }
 
   Story? byId(String id) {
     for (final s in stories) {
@@ -195,9 +269,100 @@ class AppState extends ChangeNotifier {
   }
 
   void prefetch(Iterable<Story> l) {
-    for (final s in l.take(6)) {
-      if (!_articles.containsKey(s.id)) article(s.id);
+    for (final s in l.take(4)) {
+      if (!_articles.containsKey(s.id) && !_inflight.containsKey(s.id)) article(s.id);
     }
+  }
+
+  // ---------- Börse
+  MarketDetail? cachedDetail(String sym) => _details[sym];
+
+  Future<MarketDetail?> marketDetail(String sym) async {
+    if (_details[sym] != null) return _details[sym];
+    try {
+      final j = await _get('m/${sym.replaceAll(RegExp(r'[^A-Za-z0-9.-]'), '_')}.json', cacheSec: 60);
+      if (j != null) return _details[sym] = MarketDetail(j);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Meldungen zu einem Börsenwert: von der KI zugeordnet oder per Stichwort gefunden.
+  List<Story> relatedStories(Market m) {
+    final pats = [
+      for (final a in m.alias)
+        RegExp('(^|[^A-Za-zÄÖÜäöüß])${RegExp.escape(a)}', caseSensitive: a.length > 4 ? false : true)
+    ];
+    final cats = {'boerse', 'wirtschaft', 'digital', 'ausland', 'inland'};
+    final l = stories.where((s) {
+      if (s.assets.contains(m.sym)) return true;
+      if (!cats.contains(s.cat) || pats.isEmpty) return false;
+      final text = '${s.title} ${s.teaser} ${s.summary.join(' ')}';
+      return pats.any((p) => p.hasMatch(text));
+    }).toList()
+      ..sort((a, b) => b.created.compareTo(a.created));
+    return l;
+  }
+
+  // ---------- Orte
+  List<Place>? _places;
+
+  Future<List<Place>> places() async {
+    if (_places != null) return _places!;
+    final data = await rootBundle.load('assets/orte.tsv.gz');
+    final txt = utf8.decode(gzip.decode(data.buffer.asUint8List()));
+    return _places = [
+      for (final line in txt.split('\n'))
+        if (line.isNotEmpty)
+          () {
+            final f = line.split('\t');
+            return Place(f[1], f[0], f[2], double.parse(f[3]), double.parse(f[4]));
+          }()
+    ];
+  }
+
+  Future<List<Place>> searchPlaces(String q) async {
+    final all = await places();
+    q = q.trim().toLowerCase();
+    if (q.isEmpty) return [];
+    if (RegExp(r'^\d+$').hasMatch(q)) {
+      return all.where((p) => p.plz.startsWith(q)).take(60).toList();
+    }
+    final starts = <String, Place>{}, contains = <String, Place>{};
+    for (final p in all) {
+      final n = p.name.toLowerCase();
+      final key = '${p.name}|${p.state}';
+      if (n.startsWith(q)) {
+        starts.putIfAbsent(key, () => p);
+      } else if (n.contains(q)) {
+        contains.putIfAbsent(key, () => p);
+      }
+    }
+    final l = starts.values.toList()..sort((a, b) => a.name.length.compareTo(b.name.length));
+    return [...l, ...contains.values].take(60).toList();
+  }
+
+  Future<Place> nearestPlace(double lat, double lon) async {
+    final all = await places();
+    Place best = all.first;
+    var bd = double.infinity;
+    for (final p in all) {
+      final d = pow(p.lat - lat, 2) + pow((p.lon - lon) * cos(lat * pi / 180), 2);
+      if (d < bd) {
+        bd = d.toDouble();
+        best = p;
+      }
+    }
+    return Place(best.name, best.plz, best.state, lat, lon);
+  }
+
+  void setPlace(Place p) {
+    place = p;
+    recentPlaces = [p, ...recentPlaces.where((x) => x.label != p.label)].take(6).toList();
+    _set((s) {
+      s.setString('place', jsonEncode(p.toJson()));
+      s.setString('recentPlaces', jsonEncode([for (final x in recentPlaces) x.toJson()]));
+    });
+    notifyListeners();
   }
 
   // ---------- Merkliste
@@ -207,10 +372,12 @@ class AppState extends ChangeNotifier {
     if (saved.containsKey(s.id)) {
       saved.remove(s.id);
     } else {
+      saved[s.id] = {'story': s.raw, 'article': null, 'at': DateTime.now().millisecondsSinceEpoch};
+      notifyListeners();
       final a = await article(s.id);
-      saved[s.id] = {'story': s.raw, 'article': a?.raw, 'at': DateTime.now().millisecondsSinceEpoch};
+      if (saved.containsKey(s.id)) saved[s.id]['article'] = a?.raw;
     }
-    _p.setString('saved', jsonEncode(saved));
+    _set((p) => p.setString('saved', jsonEncode(saved)));
     notifyListeners();
   }
 
@@ -223,37 +390,35 @@ class AppState extends ChangeNotifier {
   void setDetailed(bool v) {
     if (detailed == v) return;
     detailed = v;
-    _p.setBool('detailed', v);
+    _set((p) => p.setBool('detailed', v));
     notifyListeners();
   }
 
   void setSort(SortMode m) {
+    if (sort == m) return;
     sort = m;
-    _p.setInt('sort', m.index);
+    _set((p) => p.setInt('sort', m.index));
+    if (m == SortMode.timeline && days.isEmpty) loadDays();
     notifyListeners();
   }
 
   void setMood(Mood m) {
     mood = m;
-    _p.setInt('mood', m.index);
+    _set((p) => p.setInt('mood', m.index));
     notifyListeners();
   }
 
   void setTheme(ThemeMode m) {
-    themeMode = m;
-    _p.setInt('theme', m.index);
+    appearance.themeMode = m;
+    _set((p) => p.setInt('theme', m.index));
+    appearance.changed();
     notifyListeners();
   }
 
   void setTextScale(double v) {
-    textScale = v;
-    _p.setDouble('textScale', v);
-    notifyListeners();
-  }
-
-  void setCity(String c) {
-    weatherCity = c;
-    _p.setString('city', c);
+    appearance.textScale = v;
+    _set((p) => p.setDouble('textScale', v));
+    appearance.changed();
     notifyListeners();
   }
 }

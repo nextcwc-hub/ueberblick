@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 import '../data.dart';
@@ -10,27 +11,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'home.dart';
 
-const cities = <String, (double, double)>{
-  'Aachen': (50.776, 6.084), 'Augsburg': (48.371, 10.898), 'Berlin': (52.520, 13.405),
-  'Bielefeld': (52.030, 8.532), 'Bochum': (51.482, 7.216), 'Bonn': (50.737, 7.098),
-  'Braunschweig': (52.269, 10.521), 'Bremen': (53.079, 8.801), 'Chemnitz': (50.828, 12.921),
-  'Cottbus': (51.756, 14.332), 'Darmstadt': (49.873, 8.651), 'Dortmund': (51.514, 7.468),
-  'Dresden': (51.050, 13.737), 'Duisburg': (51.434, 6.762), 'Düsseldorf': (51.227, 6.773),
-  'Erfurt': (50.978, 11.029), 'Essen': (51.456, 7.012), 'Flensburg': (54.794, 9.446),
-  'Frankfurt am Main': (50.110, 8.682), 'Freiburg': (47.999, 7.842), 'Garmisch-Partenkirchen': (47.492, 11.096),
-  'Göttingen': (51.541, 9.916), 'Hamburg': (53.551, 9.993), 'Hannover': (52.375, 9.732),
-  'Heidelberg': (49.399, 8.672), 'Ingolstadt': (48.766, 11.426), 'Jena': (50.927, 11.586),
-  'Karlsruhe': (49.007, 8.404), 'Kassel': (51.312, 9.479), 'Kiel': (54.323, 10.123),
-  'Koblenz': (50.356, 7.588), 'Köln': (50.938, 6.960), 'Konstanz': (47.660, 9.175),
-  'Leipzig': (51.340, 12.375), 'Lübeck': (53.866, 10.686), 'Magdeburg': (52.121, 11.628),
-  'Mainz': (49.993, 8.247), 'Mannheim': (49.488, 8.466), 'München': (48.137, 11.576),
-  'Münster': (51.961, 7.626), 'Nürnberg': (49.452, 11.077), 'Oldenburg': (53.143, 8.214),
-  'Osnabrück': (52.279, 8.047), 'Passau': (48.575, 13.462), 'Potsdam': (52.391, 13.064),
-  'Regensburg': (49.013, 12.102), 'Rostock': (54.092, 12.099), 'Saarbrücken': (49.240, 6.997),
-  'Schwerin': (53.635, 11.401), 'Stuttgart': (48.778, 9.180), 'Trier': (49.750, 6.637),
-  'Ulm': (48.401, 9.988), 'Wiesbaden': (50.078, 8.240), 'Würzburg': (49.792, 9.953),
-  'Wuppertal': (51.256, 7.151), 'Sylt (Westerland)': (54.907, 8.308), 'Zugspitze': (47.421, 10.985),
-};
+
 
 const _cond = {
   'clear-day': ('Sonnig', Icons.wb_sunny_outlined),
@@ -60,29 +41,41 @@ class _Wx {
   final Map current;
   final List<Map> hours;
   final List<Map> alerts;
-  _Wx(this.current, this.hours, this.alerts);
+  final List<(DateTime, double)> radar; // mm pro Stunde
+  final String region;
+  _Wx(this.current, this.hours, this.alerts, this.radar, this.region);
 }
 
-Future<_Wx> _load(String city) async {
-  final (lat, lon) = cities[city] ?? cities['Berlin']!;
+Future<_Wx> _load(Place p) async {
   final now = DateTime.now();
   String d(DateTime t) => '${t.year}-${two(t.month)}-${two(t.day)}';
   Future<Map> get(String path, Map<String, String> q) async {
     final r = await http
-        .get(Uri.https('api.brightsky.dev', path, {'lat': '$lat', 'lon': '$lon', ...q}))
+        .get(Uri.https('api.brightsky.dev', path, {'lat': '${p.lat}', 'lon': '${p.lon}', ...q}))
         .timeout(const Duration(seconds: 15));
     return jsonDecode(utf8.decode(r.bodyBytes));
   }
 
   final res = await Future.wait([
     get('/current_weather', {'tz': 'Europe/Berlin'}),
-    get('/weather', {'date': d(now), 'last_date': d(now.add(const Duration(days: 8))), 'tz': 'Europe/Berlin'}),
-    get('/alerts', {'tz': 'Europe/Berlin'}),
+    get('/weather', {'date': d(now), 'last_date': d(now.add(const Duration(days: 9))), 'tz': 'Europe/Berlin'}),
+    get('/alerts', {'tz': 'Europe/Berlin'}).catchError((_) => <String, dynamic>{}),
+    get('/radar', {'distance': '0', 'format': 'plain', 'tz': 'Europe/Berlin'}).catchError((_) => <String, dynamic>{}),
   ]);
+  final radar = <(DateTime, double)>[];
+  for (final r in (res[3]['radar'] ?? const [])) {
+    try {
+      final v = (r['precipitation_5'][0][0] as num).toDouble() / 100 * 12; // 0,01 mm / 5 min -> mm/h
+      radar.add((DateTime.parse(r['timestamp']).toLocal(), v));
+    } catch (_) {}
+  }
+  final loc = res[2]['location'];
   return _Wx(
     Map.from(res[0]['weather'] ?? {}),
     [for (final h in (res[1]['weather'] ?? const [])) Map.from(h)],
     [for (final a in (res[2]['alerts'] ?? const [])) Map.from(a)],
+    radar,
+    loc == null ? '' : '${loc['name'] ?? ''}${loc['district'] != null ? ', ${loc['district']}' : ''}',
   );
 }
 
@@ -93,19 +86,19 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
-  late Future<_Wx> fut = _load(app.weatherCity);
+  late Future<_Wx> fut = _load(app.place);
 
-  void _reload() => setState(() => fut = _load(app.weatherCity));
+  void _reload() => setState(() => fut = _load(app.place));
 
   Future<void> _pickCity() async {
-    final c = await showModalBottomSheet<String>(
+    final p = await showModalBottomSheet<Place>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => const _CityPicker(),
+      builder: (_) => const _PlacePicker(),
     );
-    if (c != null) {
-      app.setCity(c);
+    if (p != null) {
+      app.setPlace(p);
       _reload();
     }
   }
@@ -117,7 +110,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
       child: RefreshIndicator(
         onRefresh: () async {
           _reload();
-          await fut.catchError((_) => _Wx({}, [], []));
+          await fut.catchError((_) => _Wx({}, [], [], [], ''));
         },
         child: FutureBuilder<_Wx>(
           future: fut,
@@ -132,7 +125,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     TextButton.icon(
                       onPressed: _pickCity,
                       icon: const Icon(Icons.place_outlined, size: 18),
-                      label: Text(app.weatherCity),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text(app.place.name, overflow: TextOverflow.ellipsis),
+                      ),
                     ),
                   ]),
                 ),
@@ -211,7 +207,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
           _stat(context, Icons.umbrella_outlined, '${((cur['precipitation_60'] ?? 0) as num).toStringAsFixed(1)} mm/h'),
         ]),
       ),
+      if (w.region.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text('Warnregion: ${w.region}', style: sans(context, 12, color: muted(context))),
+        ),
       for (final a in w.alerts) _AlertCard(a),
+      if (w.radar.length > 3) _Nowcast(w.radar),
       const SectionLabel('Nächste 36 Stunden'),
       if (hours.length > 2) _HourlyChart(hours),
       const SectionLabel('Die nächsten Tage'),
@@ -448,43 +450,178 @@ class _AlertCard extends StatelessWidget {
   }
 }
 
-class _CityPicker extends StatefulWidget {
-  const _CityPicker();
+class _PlacePicker extends StatefulWidget {
+  const _PlacePicker();
   @override
-  State<_CityPicker> createState() => _CityPickerState();
+  State<_PlacePicker> createState() => _PlacePickerState();
 }
 
-class _CityPickerState extends State<_CityPicker> {
-  String q = '';
+class _PlacePickerState extends State<_PlacePicker> {
+  List<Place> results = [];
+  bool locating = false;
+  String? gpsError;
+  int _q = 0;
+
+  Future<void> _search(String q) async {
+    final n = ++_q;
+    final r = await app.searchPlaces(q);
+    if (mounted && n == _q) setState(() => results = r);
+  }
+
+  Future<void> _gps() async {
+    setState(() {
+      locating = true;
+      gpsError = null;
+    });
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) throw 'Standortdienst ist ausgeschaltet.';
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        throw 'Kein Zugriff auf den Standort erlaubt.';
+      }
+      final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 15)));
+      final p = await app.nearestPlace(pos.latitude, pos.longitude);
+      if (mounted) Navigator.pop(context, p);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          locating = false;
+          gpsError = e is String ? e : 'Standort konnte nicht ermittelt werden.';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final list = cities.keys.where((c) => c.toLowerCase().contains(q.toLowerCase())).toList();
-    return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.75,
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: TextField(
-            autofocus: false,
-            decoration: InputDecoration(
-              hintText: 'Stadt suchen',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            ),
-            onChanged: (v) => setState(() => q = v),
+    final cs = Theme.of(context).colorScheme;
+    Widget tile(Place p, {IconData icon = Icons.place_outlined}) => ListTile(
+          leading: Icon(icon, color: muted(context)),
+          title: Text(p.name, style: sans(context, 15, w: FontWeight.w600)),
+          subtitle: Text('${p.plz.isEmpty ? '' : '${p.plz} · '}${p.state}', style: sans(context, 12.5, color: muted(context))),
+          trailing: p.label == app.place.label ? Icon(Icons.check, color: cs.primary) : null,
+          onTap: () => Navigator.pop(context, p),
+        );
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.8,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: Text('Ort wählen', style: serif(context, 21, w: FontWeight.w700)),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (_, i) => ListTile(
-              title: Text(list[i]),
-              trailing: list[i] == app.weatherCity ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.pop(context, list[i]),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Ort oder Postleitzahl',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: cs.surfaceContainer,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              onChanged: _search,
             ),
           ),
+          const SizedBox(height: 6),
+          ListTile(
+            leading: locating
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(Icons.my_location, color: cs.primary),
+            title: Text('Aktuellen Standort verwenden', style: sans(context, 15, w: FontWeight.w600, color: cs.primary)),
+            subtitle: gpsError == null ? null : Text(gpsError!, style: sans(context, 12.5, color: breaking)),
+            onTap: locating ? null : _gps,
+          ),
+          const Divider(),
+          Expanded(
+            child: ListView(children: [
+              if (results.isEmpty && app.recentPlaces.isNotEmpty) ...[
+                const SectionLabel('Zuletzt verwendet'),
+                for (final p in app.recentPlaces) tile(p, icon: Icons.history),
+              ],
+              for (final p in results) tile(p),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Regenradar-Vorhersage für die nächsten zwei Stunden am gewählten Ort.
+class _Nowcast extends StatelessWidget {
+  final List<(DateTime, double)> radar;
+  const _Nowcast(this.radar);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final future = radar.where((r) => r.$1.isAfter(now.subtract(const Duration(minutes: 5)))).toList();
+    if (future.length < 3) return const SizedBox();
+    final wet = [for (final r in future) r.$2 >= 0.1];
+    final rainNow = wet.first;
+    final firstRain = future.where((r) => r.$2 >= 0.1).firstOrNull;
+    final lastRainIdx = wet.lastIndexOf(true);
+    final peak = future.map((r) => r.$2).fold<double>(0, max);
+    final kind = peak < 1 ? 'Leichter Regen' : (peak < 4 ? 'Regen' : 'Starker Regen');
+    String hm(DateTime t) => '${two(t.hour)}:${two(t.minute)}';
+    final String text;
+    if (firstRain == null) {
+      text = 'Kein Niederschlag in den nächsten zwei Stunden';
+    } else if (rainNow && wet.every((x) => x)) {
+      text = '$kind hält an';
+    } else if (rainNow && !wet.sublist(wet.indexOf(false)).contains(true)) {
+      text = '$kind endet voraussichtlich gegen ${hm(future[wet.indexOf(false)].$1)} Uhr';
+    } else if (!rainNow && wet.sublist(wet.indexOf(true)).every((x) => x)) {
+      text = '$kind ab etwa ${hm(firstRain.$1)} Uhr';
+    } else {
+      text = 'Zeitweise ${kind.replaceFirst('L', 'l').replaceFirst('S', 's')} bis etwa ${hm(future[lastRainIdx].$1)} Uhr';
+    }
+    final maxV = future.map((r) => r.$2).fold<double>(1.0, max);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.radar, size: 18, color: const Color(0xFF2A84AE)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: sans(context, 14, w: FontWeight.w600))),
+        ]),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 44,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            for (final r in future)
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 1),
+                  height: r.$2 < 0.05 ? 2 : 4 + 40 * min(1.0, r.$2 / maxV),
+                  decoration: BoxDecoration(
+                    color: r.$2 < 0.05 ? cs.outlineVariant : const Color(0xFF2A84AE),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+          ]),
         ),
+        const SizedBox(height: 4),
+        Row(children: [
+          Text('jetzt', style: sans(context, 11, color: muted(context))),
+          const Spacer(),
+          Text('+1 Std.', style: sans(context, 11, color: muted(context))),
+          const Spacer(),
+          Text('${two(future.last.$1.hour)}:${two(future.last.$1.minute)}', style: sans(context, 11, color: muted(context))),
+        ]),
       ]),
     );
   }

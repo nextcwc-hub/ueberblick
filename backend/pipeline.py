@@ -198,7 +198,9 @@ def publish(v1: Path, stories: dict, ev: dict, res: dict, imgs: list, now: float
     stories[ev["id"]] = {
         "id": ev["id"], "cat": res["cat"], "title": res["title"].strip(), "teaser": res["teaser"].strip(),
         "summary": [s.strip() for s in res["summary"] if s.strip()][:5], "img": img,
-        "created": prev.get("created", int(now)), "updated": int(now),
+        # Zeitpunkt der ersten Meldung zum Ereignis (für den Zeitstrahl), höchstens 24 h zurück
+        "created": prev.get("created") or int(max(now - 86400, min([i["p"] for i in ev["items"]] + [now]))),
+        "updated": int(now),
         "imp": max(1, min(10, res["imp"])), "srcn": len(srcs), "sources": srcs[:12],
         "loc": res["location"].strip(), "ver": prev.get("ver", 0) + 1,
         "tone": res.get("tone", "neutral"),

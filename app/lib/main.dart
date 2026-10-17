@@ -16,18 +16,21 @@ Future<void> main() async {
   runApp(const UeberblickApp());
 }
 
+final _light = buildTheme(Brightness.light);
+final _dark = buildTheme(Brightness.dark);
+
 class UeberblickApp extends StatelessWidget {
   const UeberblickApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: app,
+      listenable: app.appearance,
       builder: (context, _) => MaterialApp(
         title: 'Überblick',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
+        theme: _light,
+        darkTheme: _dark,
         themeMode: app.themeMode,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
@@ -93,6 +96,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
           selectedIndex: tab,
           onDestinationSelected: (i) {
             if (i == tab && i == 0) homeKey.currentState?.scrollToTop();
+            if (i == 2) app.refreshMarkets();
             setState(() => tab = i);
           },
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,

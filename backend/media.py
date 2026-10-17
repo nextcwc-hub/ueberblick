@@ -114,7 +114,16 @@ def safe(sym: str) -> str:
 def _pts(res):
     ts = res.get("timestamp") or []
     cl = (res.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
-    return [[t, round(c, 4)] for t, c in zip(ts, cl) if c is not None]
+    pts = [[t, round(c, 4)] for t, c in zip(ts, cl) if c is not None]
+    # einzelne Fehlticks (Ausreißer gegenüber beiden Nachbarn) entfernen
+    return [p for i, p in enumerate(pts)
+            if not (0 < i < len(pts) - 1 and _spike(pts[i - 1][1], p[1], pts[i + 1][1]))]
+
+
+def _spike(a, b, c):
+    if not a or not c:
+        return False
+    return abs(b - a) / a > 0.008 and abs(b - c) / c > 0.008 and abs(a - c) / c < 0.003
 
 
 def _chart(sym: str, rng: str, interval: str):

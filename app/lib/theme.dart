@@ -23,6 +23,11 @@ const cats = <Cat>[
 
 Cat catOf(String id) => cats.firstWhere((c) => c.id == id, orElse: () => cats.first);
 
+Color catColor(BuildContext c, String id) {
+  final col = catOf(id).color;
+  return Theme.of(c).brightness == Brightness.dark ? Color.lerp(col, Colors.white, 0.3)! : col;
+}
+
 const brand = Color(0xFF0E2A47);
 const breaking = Color(0xFFC62828);
 const up = Color(0xFF1E7A46);
