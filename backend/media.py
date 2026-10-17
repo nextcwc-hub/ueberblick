@@ -76,7 +76,7 @@ def commons_candidates(query: str, n: int = 6) -> list[dict]:
 ECB = "https://data-api.ecb.europa.eu/service/data/"
 # Symbol, Name, Art, EZB-Reihe, Nachkommastellen, Einheit, Suchbegriffe
 ECB_SERIES = [
-    ("USD", "Euro / US-Dollar", "fx", "EXR/D.USD.EUR.SP00.A", 4, "", ["Dollar", "Wechselkurs", "Eurokurs", "Euro-Kurs", "Devisen"]),
+    ("USD", "Euro / US-Dollar", "fx", "EXR/D.USD.EUR.SP00.A", 4, "", ["Dollarkurs", "Dollar-Kurs", "Wechselkurs", "Eurokurs", "Euro-Kurs", "Devisen"]),
     ("GBP", "Euro / Pfund", "fx", "EXR/D.GBP.EUR.SP00.A", 4, "", ["Pfund", "Sterling"]),
     ("CHF", "Euro / Franken", "fx", "EXR/D.CHF.EUR.SP00.A", 4, "", ["Franken"]),
     ("JPY", "Euro / Yen", "fx", "EXR/D.JPY.EUR.SP00.A", 2, "", ["Yen"]),
