@@ -160,7 +160,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _reportCard(BuildContext context) {
     final list = app.stories.where((s) => s.cat == 'wetter').toList()
-      ..sort((a, b) => b.updated.compareTo(a.updated));
+      ..sort((a, b) => b.time.compareTo(a.time));
     if (list.isEmpty) return const SizedBox();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SectionLabel('Wetterbericht Deutschland'),

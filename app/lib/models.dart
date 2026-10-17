@@ -48,9 +48,12 @@ class Story {
   bool get isBreaking => imp >= 9 && DateTime.now().difference(created).inHours < 3;
   bool get wasUpdated => ver > 1 && updated.difference(created).inMinutes > 10;
 
+  /// Angezeigte und für „Neueste“ maßgebliche Zeit: letzte Aktualisierung, sonst erste Meldung.
+  DateTime get time => wasUpdated ? updated : created;
+
   /// Relevanz: Bedeutung + Anzahl unabhängiger Quellen, abnehmend mit dem Alter.
   double get relevance {
-    final ageH = DateTime.now().difference(updated).inMinutes / 60.0;
+    final ageH = DateTime.now().difference(time).inMinutes / 60.0;
     return imp * 10 + 7 * log(1 + srcn) - 1.6 * ageH;
   }
 }

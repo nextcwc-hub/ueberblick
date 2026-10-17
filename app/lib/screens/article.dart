@@ -318,7 +318,10 @@ class _Sources extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Divider(),
         const SizedBox(height: 16),
-        Text('Grundlage dieser Meldung', style: sans(context, 13, w: FontWeight.w700)),
+        Text('Berichte, auf denen diese Meldung beruht', style: sans(context, 13, w: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text('Links zu den Originalberichten. Die Medien haben diesen Text weder verfasst noch geprüft.',
+            style: sans(context, 12, color: muted(context), h: 1.45)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final src in s.sources)

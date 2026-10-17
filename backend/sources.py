@@ -3,9 +3,12 @@ import calendar
 import hashlib
 import html
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
 import feedparser
 import httpx
@@ -44,6 +47,16 @@ FEEDS = [
     ("heise", "https://www.heise.de/rss/heise-atom.xml", "digital", True),
     ("netzpolitik.org", "https://netzpolitik.org/feed/", "digital", True),
     ("Correctiv", "https://correctiv.org/feed/", "investigativ", True),
+    ("Deutschlandfunk", "https://www.deutschlandfunk.de/wirtschaft-106.rss", "wirtschaft", True),
+    ("ZDFheute", "https://www.zdfheute.de/rss/zdf/politik", None, True),
+    ("ZDF", "https://www.zdf.de/rss/zdf/sport", "sport", True),
+    ("ZDF", "https://www.zdfheute.de/rss/zdf/wissen", "wissen", True),
+    ("Bundestag", "https://www.bundestag.de/static/appdata/includes/rss/hib.rss", "inland", True),
+    ("Destatis", "https://www.destatis.de/SiteGlobals/Functions/RSSFeed/DE/RSSNewsfeed/Aktuell.xml", "wirtschaft", True),
+    ("Bundesbank", "https://www.bundesbank.de/service/rss/de/633286/feed.rss", "wirtschaft", True),
+    ("EZB", "https://www.ecb.europa.eu/rss/press.html", "wirtschaft", True),
+    ("EU-Kommission", "https://ec.europa.eu/commission/presscorner/api/rss?language=de", "ausland", True),
+    ("UN News", "https://news.un.org/feed/subscribe/en/news/all/rss.xml", "ausland", True),
     ("BBC", "https://feeds.bbci.co.uk/news/world/rss.xml", "ausland", True),
     ("The Guardian", "https://www.theguardian.com/world/rss", "ausland", True),
     ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml", "ausland", True),
@@ -114,14 +127,81 @@ def fetch_all(max_age_h: float) -> list[dict]:
             seen.add(it["h"])
             items.append(it)
     items.sort(key=lambda x: -x["p"])
+    # Anreißer nur von Anbietern ohne Text-Mining-Vorbehalt verwenden, sonst nur die Schlagzeile
+    hosts = {}
+    for it in items:
+        hosts.setdefault(urlparse(it["u"]).netloc, it["u"])
+    with ThreadPoolExecutor(12) as ex:
+        allowed = dict(zip(hosts, ex.map(tdm_allowed, hosts.values())))
+    for it in items:
+        it["ok"] = allowed.get(urlparse(it["u"]).netloc, False)
+        if not it["ok"]:
+            it["d"] = ""
     return items
 
 
+# ---------------------------------------------------------------- Text-Mining-Vorbehalt (§ 44b UrhG)
+# Volltexte werden nur gelesen, wenn der Anbieter Text- und Data-Mining nicht maschinenlesbar
+# untersagt hat: robots.txt (für uns und gängige KI-Crawler), TDMRep (/.well-known/tdmrep.json),
+# HTTP-Header bzw. Meta-Tag "tdm-reservation". Im Zweifel wird nur der RSS-Anreißer genutzt.
+
+AI_AGENTS = ["UeberblickNews", "GPTBot", "ClaudeBot", "anthropic-ai", "CCBot", "Google-Extended",
+             "PerplexityBot", "Bytespider", "cohere-ai", "Applebot-Extended", "meta-externalagent"]
+_policy: dict[str, tuple] = {}
+_policy_lock = threading.Lock()
+
+
+def _host_policy(base: str):
+    with _policy_lock:
+        if base in _policy:
+            return _policy[base]
+    rp, tdm = None, []
+    try:
+        r = httpx.get(base + "/robots.txt", timeout=10, follow_redirects=True, headers={"User-Agent": UA})
+        if r.status_code < 400:
+            rp = RobotFileParser()
+            rp.parse(r.text.splitlines())
+        elif r.status_code >= 500:
+            rp = False  # unklar -> nicht verwenden
+    except Exception:
+        rp = False
+    try:
+        r = httpx.get(base + "/.well-known/tdmrep.json", timeout=10, follow_redirects=True, headers={"User-Agent": UA})
+        if r.status_code == 200:
+            tdm = [x for x in r.json() if str(x.get("tdm-reservation")) == "1"]
+    except Exception:
+        pass
+    with _policy_lock:
+        _policy[base] = (rp, tdm)
+    return rp, tdm
+
+
+def tdm_allowed(url: str) -> bool:
+    u = urlparse(url)
+    rp, tdm = _host_policy(f"{u.scheme}://{u.netloc}")
+    if rp is False:
+        return False
+    if rp is not None and not all(rp.can_fetch(a, url) for a in AI_AGENTS):
+        return False
+    for rule in tdm:
+        loc = str(rule.get("location", "/")).rstrip("*")
+        if u.path.startswith(loc or "/"):
+            return False
+    return True
+
+
+_meta_tdm = re.compile(r"""<meta[^>]+name=["']tdm-reservation["'][^>]+content=["']1""", re.I)
+
+
 def fetch_text(url: str, limit: int = 5000) -> str:
-    """Volltext eines Artikels als Faktengrundlage (wird nicht veröffentlicht)."""
+    """Volltext eines Artikels als Faktengrundlage (wird nicht veröffentlicht) – nur ohne TDM-Vorbehalt."""
     import trafilatura
     try:
+        if not tdm_allowed(url):
+            return ""
         r = httpx.get(url, timeout=15, follow_redirects=True, headers={"User-Agent": UA})
+        if r.headers.get("tdm-reservation", "").strip() == "1" or _meta_tdm.search(r.text[:20000]):
+            return ""
         txt = trafilatura.extract(r.text, include_comments=False, include_tables=False) or ""
         return txt[:limit]
     except Exception:

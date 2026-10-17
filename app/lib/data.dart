@@ -201,11 +201,11 @@ class AppState extends ChangeNotifier {
     }
     switch (sort) {
       case SortMode.newest:
-        l.sort((a, b) => b.updated.compareTo(a.updated));
+        l.sort((a, b) => b.time.compareTo(a.time));
       case SortMode.relevance:
         l.sort((a, b) => b.relevance.compareTo(a.relevance));
       case SortMode.sources:
-        l.sort((a, b) => b.srcn != a.srcn ? b.srcn.compareTo(a.srcn) : b.updated.compareTo(a.updated));
+        l.sort((a, b) => b.srcn != a.srcn ? b.srcn.compareTo(a.srcn) : b.time.compareTo(a.time));
       case SortMode.timeline:
         l.sort((a, b) => b.created.compareTo(a.created));
     }

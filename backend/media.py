@@ -17,6 +17,17 @@ UA = {"User-Agent": "UeberblickNews/1.0 (https://github.com/nextcwc-hub/ueberbli
 _OK_LICENSE = re.compile(r"^(cc0|public domain|pd|cc by(-sa)? \d(\.\d)?( [a-z]+)?)", re.I)
 
 
+_GENERIC = {"building", "buildings", "city", "photo", "view", "germany", "german", "street", "people", "the",
+            "and", "with", "from", "image", "picture", "symbol", "logo", "general", "exterior", "interior"}
+
+
+def _matches(query: str, text: str) -> bool:
+    toks = [t for t in re.findall(r"[a-zäöüß0-9]+", query.lower()) if len(t) >= 4 and t not in _GENERIC]
+    text = text.lower()
+    # bei mehreren Suchbegriffen müssen mindestens zwei im Bildtitel/der Beschreibung vorkommen
+    return not toks or sum(t[:6] in text for t in toks) >= min(2, len(toks))
+
+
 def commons_candidates(query: str, n: int = 6) -> list[dict]:
     if not query.strip():
         return []
@@ -39,6 +50,9 @@ def commons_candidates(query: str, n: int = 6) -> list[dict]:
             continue
         if ii.get("mime") != "image/jpeg" or w < 1200 or not h or not 1.2 <= w / h <= 2.1:
             continue
+        desc = clean(em.get("ImageDescription", {}).get("value", ""))
+        if not _matches(query, p["title"] + " " + desc):
+            continue  # Bild hat erkennbar nichts mit dem Suchbegriff zu tun
         artist = clean(em.get("Artist", {}).get("value", "")) or "Unbekannt"
         out.append({
             "title": p["title"].removeprefix("File:").rsplit(".", 1)[0][:120],

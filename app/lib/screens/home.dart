@@ -45,7 +45,8 @@ class HomeScreenState extends State<HomeScreen> {
         }
         if (!timeline) app.prefetch(list);
         final newCount = app.pending.where((s) => cat == null || s.cat == cat).length;
-        return Stack(children: [
+        // SafeArea: Kopfzeile darf beim Scrollen nicht unter die Statusleiste rutschen
+        return SafeArea(bottom: false, child: Stack(children: [
           RefreshIndicator(
             onRefresh: () async {
               await app.refresh(applyNow: true);
@@ -56,6 +57,7 @@ class HomeScreenState extends State<HomeScreen> {
               controller: scroll,
               slivers: [
                 SliverAppBar(
+                  primary: false,
                   floating: true,
                   snap: true,
                   toolbarHeight: 64,
@@ -144,7 +146,7 @@ class HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-        ]);
+        ]));
       },
     );
   }

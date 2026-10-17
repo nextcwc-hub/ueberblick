@@ -129,6 +129,8 @@ def main(out: Path):
         n_src = len(distinct_sources(ev))
         if not ev["written"]:
             ok = ev["imp"] >= 6 or (ev["imp"] >= 4 and (n_src >= 2 or ev.get("tone") == "positiv")) or n_src >= 3
+            # Nur schreiben, wenn mindestens eine Quelle Text-Mining erlaubt (sonst gäbe es nur Schlagzeilen)
+            ok = ok and any(sources.tdm_allowed(i["u"]) for i in ev["items"])
             if ok and now - ev["last_item"] < 12 * 3600:
                 have = recent.get(ev["cat"], 0)
                 bonus = 25 if have < 3 else (10 if have < 6 else 0)
@@ -154,7 +156,7 @@ def main(out: Path):
     alist = "MARKTWERTE für assets (Kürzel = Name): " + ", ".join(f"{x['sym']} = {x['name']}" for x in m["items"])
 
     def job(ev):
-        its = sorted(ev["items"], key=lambda i: (i["s"] not in sources.OPEN_SOURCES, -i["p"]))[:8]
+        its = sorted(ev["items"], key=lambda i: (not sources.tdm_allowed(i["u"]), -i["p"]))[:8]
         reports, fetched = [], 0
         for i in its:
             r = {"s": i["s"], "t": i["t"], "d": fresh.get(i["h"], {}).get("d", "")}

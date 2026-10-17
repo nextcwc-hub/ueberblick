@@ -62,7 +62,7 @@ class _MarketsScreenState extends State<MarketsScreen> {
           var list = ms.where((m) => m.kind == group).toList();
           if (byChange) list.sort((a, b) => b.pct.compareTo(a.pct));
           final news = app.stories.where((s) => s.cat == 'boerse').toList()
-            ..sort((a, b) => b.updated.compareTo(a.updated));
+            ..sort((a, b) => b.time.compareTo(a.time));
           return RefreshIndicator(
             onRefresh: () => app.refreshMarkets(),
             child: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
