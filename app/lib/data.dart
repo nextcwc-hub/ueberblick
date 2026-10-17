@@ -354,7 +354,9 @@ class AppState extends ChangeNotifier {
         best = p;
       }
     }
-    return Place(best.name, best.plz, best.state, lat, lon);
+    // auf ca. 1 km gerundet – genaue GPS-Koordinaten verlassen das Gerät nicht
+    double r(double v) => (v * 100).roundToDouble() / 100;
+    return Place(best.name, best.plz, best.state, r(lat), r(lon));
   }
 
   void setPlace(Place p) {

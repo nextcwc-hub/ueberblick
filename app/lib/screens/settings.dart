@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data.dart';
+import '../legal.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -71,17 +72,19 @@ class SettingsScreen extends StatelessWidget {
               style: sans(context, 14, h: 1.55, color: muted(context)),
             ),
           ),
-          const SectionLabel('Daten & Lizenzen'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Fotos: Wikimedia Commons (freie Lizenzen, Urheber jeweils am Bild).\n'
-              'Wetter: Deutscher Wetterdienst (CC BY 4.0) über Bright Sky.\n'
-              'Ortsdaten: GeoNames (CC BY 4.0, geonames.org).\n'
-              'Schriften: Source Serif 4 und Inter (SIL Open Font License).\n'
-              'Kurse: verzögert, ohne Gewähr.',
-              style: sans(context, 13.5, h: 1.6, color: muted(context)),
-            ),
+          const SectionLabel('Rechtliches'),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Impressum, Quellen und Lizenzen'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Datenschutzerklärung'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen(privacy: true))),
           ),
           const SizedBox(height: 16),
           Center(child: Text('Überblick 1.0', style: sans(context, 12, color: muted(context)))),

@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data.dart';
+import '../legal.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -346,6 +347,19 @@ class _Sources extends StatelessWidget {
             ),
           ),
         ]),
+        if (operatorSet) ...[
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: () => _open(Uri(
+              scheme: 'mailto',
+              path: operatorEmail,
+              query: 'subject=${Uri.encodeComponent('Fehler in: ${s.title}')}'
+                  '&body=${Uri.encodeComponent('Artikel-ID: ${s.id}\n\nWas ist falsch?\n')}',
+            ).toString()),
+            icon: const Icon(Icons.flag_outlined, size: 18),
+            label: const Text('Fehler melden'),
+          ),
+        ],
       ]),
     );
   }

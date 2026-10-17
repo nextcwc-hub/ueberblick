@@ -70,96 +70,34 @@ def commons_candidates(query: str, n: int = 6) -> list[dict]:
     return out
 
 
-# ------------------------------------------------------------------ Börse
+# ------------------------------------------------------------------ Börse (nur frei weitergebbare Daten)
+# EZB-Daten: frei nutzbar mit Quellenangabe. Krypto: CoinGecko (Hinweis „Powered by CoinGecko“ in der App).
 
-# Symbol, Name, Art, Suchbegriffe für passende Nachrichten
-INSTRUMENTS = [
-    ("^GDAXI", "DAX", "index", ["DAX"]),
-    ("^MDAXI", "MDAX", "index", ["MDAX"]),
-    ("^TECDAX", "TecDAX", "index", ["TecDAX"]),
-    ("^SDAXI", "SDAX", "index", ["SDAX"]),
-    ("^STOXX50E", "Euro Stoxx 50", "index", ["Euro Stoxx", "EuroStoxx"]),
-    ("^FTSE", "FTSE 100", "index", ["FTSE", "Londoner Börse"]),
-    ("^FCHI", "CAC 40", "index", ["CAC"]),
-    ("^DJI", "Dow Jones", "index", ["Dow Jones", "Dow"]),
-    ("^GSPC", "S&P 500", "index", ["S&P 500", "S&P"]),
-    ("^NDX", "Nasdaq 100", "index", ["Nasdaq"]),
-    ("^N225", "Nikkei 225", "index", ["Nikkei"]),
-    ("^HSI", "Hang Seng", "index", ["Hang Seng", "Hongkonger Börse"]),
-    ("EURUSD=X", "Euro / Dollar", "fx", ["Wechselkurs", "Eurokurs", "Euro-Kurs", "Dollarkurs", "Dollar-Kurs", "Devisen"]),
-    ("EURGBP=X", "Euro / Pfund", "fx", ["Pfund", "Sterling"]),
-    ("EURCHF=X", "Euro / Franken", "fx", ["Franken"]),
-    ("EURJPY=X", "Euro / Yen", "fx", ["Yen"]),
-    ("GC=F", "Gold", "commodity", ["Gold", "Goldpreis"]),
-    ("SI=F", "Silber", "commodity", ["Silber"]),
-    ("BZ=F", "Öl (Brent)", "commodity", ["Öl", "Ölpreis", "Brent", "Opec", "Rohöl"]),
-    ("NG=F", "Erdgas (US)", "commodity", ["Erdgas", "Gaspreis", "LNG"]),
-    ("^TNX", "US-Anleihen 10 J.", "bond", ["Anleihe", "Rendite", "Treasur", "Fed", "Zins"]),
-    ("BTC-EUR", "Bitcoin", "crypto", ["Bitcoin", "Krypto"]),
-    ("ETH-EUR", "Ethereum", "crypto", ["Ethereum", "Ether", "Krypto"]),
+ECB = "https://data-api.ecb.europa.eu/service/data/"
+# Symbol, Name, Art, EZB-Reihe, Nachkommastellen, Einheit, Suchbegriffe
+ECB_SERIES = [
+    ("USD", "Euro / US-Dollar", "fx", "EXR/D.USD.EUR.SP00.A", 4, "", ["Dollar", "Wechselkurs", "Eurokurs", "Euro-Kurs", "Devisen"]),
+    ("GBP", "Euro / Pfund", "fx", "EXR/D.GBP.EUR.SP00.A", 4, "", ["Pfund", "Sterling"]),
+    ("CHF", "Euro / Franken", "fx", "EXR/D.CHF.EUR.SP00.A", 4, "", ["Franken"]),
+    ("JPY", "Euro / Yen", "fx", "EXR/D.JPY.EUR.SP00.A", 2, "", ["Yen"]),
+    ("CNY", "Euro / Yuan", "fx", "EXR/D.CNY.EUR.SP00.A", 4, "", ["Yuan", "Renminbi"]),
+    ("PLN", "Euro / Złoty", "fx", "EXR/D.PLN.EUR.SP00.A", 4, "", ["Zloty", "Złoty"]),
+    ("TRY", "Euro / Lira", "fx", "EXR/D.TRY.EUR.SP00.A", 4, "", ["Lira"]),
+    ("DFR", "EZB-Einlagenzins", "rate", "FM/D.U2.EUR.4F.KR.DFR.LEV", 2, " %", ["Leitzins", "EZB", "Zinsentscheid", "Zinssenkung", "Zinserhöhung"]),
+    ("ESTR", "€STR (Tagesgeld)", "rate", "EST/B.EU000A2X2A25.WT", 3, " %", ["€STR", "Tagesgeld"]),
+    ("YC10", "Rendite 10 J. (Euroraum, AAA)", "rate", "YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y", 2, " %", ["Anleihe", "Rendite", "Staatsanleihe"]),
+    ("DE10Y", "Rendite Bundesanleihe 10 J.", "rate", "IRS/M.DE.L.L40.CI.0000.EUR.N.Z", 2, " %", ["Bundesanleihe", "Bund-Rendite"]),
+    ("HICP_DE", "Inflation Deutschland", "inflation", "eurostat:DE", 1, " %", ["Inflation", "Teuerung", "Verbraucherpreise"]),
+    ("HICP_EA", "Inflation Euroraum", "inflation", "eurostat:EA20", 1, " %", ["Inflation", "Teuerung"]),
 ]
+CRYPTO = [("BTC", "bitcoin", "Bitcoin", ["Bitcoin", "Krypto"]), ("ETH", "ethereum", "Ethereum", ["Ethereum", "Ether", "Krypto"])]
 
-STOCKS = [
-    ("ADS.DE", "Adidas"), ("AIR.DE", "Airbus"), ("ALV.DE", "Allianz"), ("BAS.DE", "BASF"),
-    ("BAYN.DE", "Bayer"), ("BEI.DE", "Beiersdorf"), ("BMW.DE", "BMW"), ("BNR.DE", "Brenntag"),
-    ("CBK.DE", "Commerzbank"), ("CON.DE", "Continental"), ("DTG.DE", "Daimler Truck"),
-    ("DBK.DE", "Deutsche Bank"), ("DB1.DE", "Deutsche Börse"), ("DHL.DE", "DHL Group"),
-    ("DTE.DE", "Deutsche Telekom"), ("EOAN.DE", "E.ON"), ("FRE.DE", "Fresenius"),
-    ("FME.DE", "Fresenius Medical Care"), ("G1A.DE", "GEA"), ("HNR1.DE", "Hannover Rück"),
-    ("HEI.DE", "Heidelberg Materials"), ("HEN3.DE", "Henkel"), ("IFX.DE", "Infineon"),
-    ("MBG.DE", "Mercedes-Benz"), ("MRK.DE", "Merck"), ("MTX.DE", "MTU Aero Engines"),
-    ("MUV2.DE", "Munich Re"), ("P911.DE", "Porsche"), ("PAH3.DE", "Porsche SE"),
-    ("QIA.DE", "Qiagen"), ("RHM.DE", "Rheinmetall"), ("RWE.DE", "RWE"), ("SAP.DE", "SAP"),
-    ("SRT3.DE", "Sartorius"), ("SIE.DE", "Siemens"), ("ENR.DE", "Siemens Energy"),
-    ("SHL.DE", "Siemens Healthineers"), ("SY1.DE", "Symrise"), ("VOW3.DE", "Volkswagen"),
-    ("VNA.DE", "Vonovia"), ("ZAL.DE", "Zalando"),
-]
-_ALIAS_EXTRA = {"VOW3.DE": ["VW"], "MBG.DE": ["Mercedes"], "DTE.DE": ["Telekom"],
-                "MUV2.DE": ["Münchener Rück"], "DHL.DE": ["DHL"]}
-
-H = {"User-Agent": "Mozilla/5.0"}
+H = {"User-Agent": "UeberblickNews/1.0 (https://github.com/nextcwc-hub/ueberblick)"}
 HIST_EVERY = 3 * 3600
 
 
 def safe(sym: str) -> str:
-    return re.sub(r"[^A-Za-z0-9-]", "_", sym)  # ohne Punkte – "CON.DE" wäre unter Windows ein reservierter Name
-
-
-def _pts(res):
-    ts = res.get("timestamp") or []
-    cl = (res.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
-    pts = [[t, round(c, 4)] for t, c in zip(ts, cl) if c is not None]
-    # einzelne Fehlticks (Ausreißer gegenüber beiden Nachbarn) entfernen
-    return [p for i, p in enumerate(pts)
-            if not (0 < i < len(pts) - 1 and _spike(pts[i - 1][1], p[1], pts[i + 1][1]))]
-
-
-def _spike(a, b, c):
-    if not a or not c:
-        return False
-    return abs(b - a) / a > 0.008 and abs(b - c) / c > 0.008 and abs(a - c) / c < 0.003
-
-
-def _chart(sym: str, rng: str, interval: str):
-    r = httpx.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-                  params={"range": rng, "interval": interval}, headers=H, timeout=15)
-    res = r.json()["chart"]["result"][0]
-    return res["meta"], _pts(res)
-
-
-def _spark(syms: list[str], rng: str, interval: str) -> dict:
-    out = {}
-    for i in range(0, len(syms), 20):
-        try:
-            r = httpx.get("https://query1.finance.yahoo.com/v7/finance/spark", headers=H, timeout=20,
-                          params={"symbols": ",".join(syms[i:i + 20]), "range": rng, "interval": interval})
-            for x in r.json()["spark"]["result"]:
-                resp = (x.get("response") or [None])[0]
-                if resp:
-                    out[x["symbol"]] = (resp.get("meta", {}), _pts(resp))
-        except Exception as ex:
-            print(f"  spark fail: {ex}")
-    return out
+    return re.sub(r"[^A-Za-z0-9-]", "_", sym)
 
 
 def _thin(pts, n):
@@ -171,88 +109,132 @@ def _thin(pts, n):
     return out
 
 
-def _summary(sym, name, kind, alias, meta, intraday):
-    price = meta.get("regularMarketPrice") or (intraday[-1][1] if intraday else None)
-    prev = meta.get("chartPreviousClose") or meta.get("previousClose")
-    if price is None or not prev:
-        return None
-    vals = [p[1] for p in intraday]
+def _ecb(series: str, n: int):
+    r = httpx.get(ECB + series, params={"format": "jsondata", "lastNObservations": n}, headers=H, timeout=30)
+    j = r.json()
+    obs = list(j["dataSets"][0]["series"].values())[0]["observations"]
+    dims = j["structure"]["dimensions"]["observation"][0]["values"]
+    out = []
+    for i, o in sorted(obs.items(), key=lambda kv: int(kv[0])):
+        if o[0] is None:
+            continue
+        d = dims[int(i)]["id"]  # 2026-10-16 oder 2026-09
+        fmt = "%Y-%m-%d" if len(d) == 10 else "%Y-%m"
+        t = int(datetime.strptime(d, fmt).replace(hour=16 if len(d) == 10 else 0, tzinfo=ZoneInfo("Europe/Berlin")).timestamp())
+        out.append([t, round(float(o[0]), 5)])
+    return out
+
+
+def _eurostat(geo: str):
+    """HICP-Jahresrate (Eurostat, frei nutzbar mit Quellenangabe)."""
+    r = httpx.get("https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_minr", headers=H,
+                  timeout=40, params={"geo": geo, "coicop18": "TOTAL", "unit": "RCH_A", "lastTimePeriod": 130})
+    j = r.json()
+    out = []
+    for d, i in sorted(j["dimension"]["time"]["category"]["index"].items(), key=lambda kv: kv[1]):
+        v = j["value"].get(str(i))
+        if v is not None:
+            t = int(datetime.strptime(d, "%Y-%m").replace(tzinfo=ZoneInfo("Europe/Berlin")).timestamp())
+            out.append([t, float(v)])
+    return out
+
+
+def _cg(path: str, params: dict):
+    for attempt in range(3):
+        r = httpx.get("https://api.coingecko.com/api/v3/" + path, headers=H, timeout=20, params=params)
+        if r.status_code == 429:
+            time.sleep(15)
+            continue
+        return r.json()
+    return {}
+
+
+def _item(sym, name, kind, digits, unit, alias, hist, intraday=None, week=None, pct=None, pp=False, freq="D"):
+    price = hist[-1][1] if not intraday else intraday[-1][1]
+    prev = hist[-2][1] if len(hist) > 1 else price
+    last_year = [p[1] for p in hist if p[0] >= hist[-1][0] - 366 * 86400]
     return {
-        "sym": sym, "name": name, "kind": kind, "cur": meta.get("currency", ""), "alias": alias,
-        "price": price, "prev": prev, "pct": round((price - prev) / prev * 100, 2),
-        "open": vals[0] if vals else None,
-        "high": meta.get("regularMarketDayHigh") or (max(vals) if vals else None),
-        "low": meta.get("regularMarketDayLow") or (min(vals) if vals else None),
-        "yhigh": meta.get("fiftyTwoWeekHigh"), "ylow": meta.get("fiftyTwoWeekLow"),
-        "time": meta.get("regularMarketTime"),
-        "spark": [p[1] for p in _thin(intraday, 48)],
+        "sym": sym, "name": name, "kind": kind, "digits": digits, "unit": unit, "alias": alias, "freq": freq,
+        "price": price, "prev": prev,
+        "pct": pct if pct is not None else (round(price - prev, 3) if pp else round((price - prev) / prev * 100, 2)),
+        "pp": pp,
+        "yhigh": max(last_year) if last_year else None, "ylow": min(last_year) if last_year else None,
+        "time": (intraday or hist)[-1][0],
+        "spark": [p[1] for p in _thin(intraday or hist[-60:], 48)],
     }
 
 
 def markets(out_dir, prev: dict) -> dict:
     """Schreibt Detaildateien nach out_dir/<sym>.json und gibt die Übersicht zurück."""
     now = time.time()
-    all_syms = [i[0] for i in INSTRUMENTS] + [s for s, _ in STOCKS]
-    need_hist = (now - prev.get("hist_at", 0) > HIST_EVERY
-                 or any(not (out_dir / f"{safe(s)}.json").exists() for s in all_syms))
     items, details = [], {}
+    hist_fresh = False
 
-    def main_inst(entry):
-        sym, name, kind, alias = entry
+    def ecb_one(e):
+        sym, name, kind, series, digits, unit, alias = e
         try:
-            meta, intraday = _chart(sym, "1d", "5m")
-            d = {"intraday": intraday}
-            if need_hist:
-                d["week"] = _chart(sym, "5d", "30m")[1]
-                d["history"] = _chart(sym, "1y", "1d")[1]
-            return _summary(sym, name, kind, alias, meta, intraday), d
+            monthly = series.startswith(("eurostat", "IRS"))
+            hist = _eurostat(series.split(":")[1]) if series.startswith("eurostat") else _ecb(series, 130 if monthly else 400)
+            if len(hist) < 2:
+                return None
+            it = _item(sym, name, kind, digits, unit, alias, hist, pp=kind != "fx", freq="M" if monthly else "D")
+            return it, {"intraday": [], "week": [], "history": hist}
         except Exception as ex:
-            print(f"  market fail {sym}: {ex}")
-            return None, None
+            print(f"  EZB fail {sym}: {ex}")
+            return None
 
     with ThreadPoolExecutor(6) as ex:
-        for entry, (s, d) in zip(INSTRUMENTS, ex.map(main_inst, INSTRUMENTS)):
-            if s:
-                items.append(s)
-                details[entry[0]] = d
+        for res in ex.map(ecb_one, ECB_SERIES):
+            if res:
+                items.append(res[0])
+                details[res[0]["sym"]] = res[1]
 
-    syms = [s for s, _ in STOCKS]
-    intr = _spark(syms, "1d", "5m")
-    week = _spark(syms, "5d", "30m") if need_hist else {}
-    hist = _spark(syms, "1y", "1d") if need_hist else {}
-    for sym, name in STOCKS:
-        if sym not in intr:
-            continue
-        meta, intraday = intr[sym]
-        s = _summary(sym, name, "stock", [name] + _ALIAS_EXTRA.get(sym, []), meta, intraday)
-        if s:
-            items.append(s)
-            d = {"intraday": intraday}
-            if need_hist:
-                d["week"] = week.get(sym, (None, []))[1]
-                d["history"] = hist.get(sym, (None, []))[1]
-            details[sym] = d
+    try:
+        cg = _cg("coins/markets", {"vs_currency": "eur", "ids": ",".join(c[1] for c in CRYPTO), "sparkline": "true"})
+        cg = {x["id"]: x for x in cg} if isinstance(cg, list) else {}
+        for sym, cid, name, alias in CRYPTO:
+            x = cg.get(cid)
+            if not x:
+                continue
+            hp = out_dir / f"{safe(sym)}.json"
+            history = []
+            if now - prev.get("hist_at", 0) < HIST_EVERY and hp.exists():  # Jahresverlauf nur alle 3 Std. neu laden
+                history = json.loads(hp.read_text(encoding="utf-8")).get("history", [])
+            if len(history) < 2:
+                hist = _cg(f"coins/{cid}/market_chart", {"vs_currency": "eur", "days": "365", "interval": "daily"})
+                history = [[int(t / 1000), round(v, 2)] for t, v in hist.get("prices", [])]
+                hist_fresh = True
+            spark7 = x.get("sparkline_in_7d", {}).get("price") or []
+            week = [[int(now - (len(spark7) - i) * 3600), round(v, 2)] for i, v in enumerate(spark7)]
+            intraday = week[-25:]
+            if len(history) < 2 or not intraday:
+                continue
+            it = _item(sym, name, "crypto", 0 if x["current_price"] > 1000 else 2, " €", alias, history,
+                       intraday=intraday, pct=round(x.get("price_change_percentage_24h") or 0, 2))
+            it["price"] = x["current_price"]
+            it["prev"] = round(x["current_price"] / (1 + (x.get("price_change_percentage_24h") or 0) / 100), 2)
+            it["high"], it["low"] = x.get("high_24h"), x.get("low_24h")
+            items.append(it)
+            details[sym] = {"intraday": intraday, "week": week, "history": history}
+    except Exception as ex:
+        print(f"  CoinGecko fail: {ex}")
 
+    all_syms = [e[0] for e in ECB_SERIES] + [c[0] for c in CRYPTO]
     for sym, d in details.items():
         p = out_dir / f"{safe(sym)}.json"
-        if not need_hist:  # Wochen- und Jahresdaten aus dem letzten Abruf übernehmen
-            try:
-                old = json.loads(p.read_text(encoding="utf-8"))
-                d["week"], d["history"] = old.get("week", []), old.get("history", [])
-            except Exception:
-                d["week"], d["history"] = [], []
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps({"sym": sym, **d}, separators=(",", ":")), encoding="utf-8")
-    keep = {f"{safe(s)}.json" for s in details}
-    for p in out_dir.glob("*.json"):
-        if p.name not in keep and not any(p.name == f"{safe(s)}.json" for s in all_syms):
-            p.unlink()
-    return {"updated": int(now), "hist_at": int(now) if need_hist else prev.get("hist_at", 0), "items": items}
+    if out_dir.exists():
+        for p in out_dir.glob("*.json"):
+            if p.stem not in {safe(s) for s in all_syms}:
+                p.unlink()
+    hist_at = int(now) if hist_fresh or now - prev.get("hist_at", 0) >= HIST_EVERY else prev.get("hist_at", 0)
+    return {"updated": int(now), "hist_at": hist_at, "items": items}
 
 
 def markets_brief(m: dict) -> str:
-    return "Aktuelle Marktdaten: " + "; ".join(
-        f"{x['name']} {x['price']:.2f} ({x['pct']:+.2f} %)" for x in m.get("items", []) if x["kind"] != "stock")
+    return "Aktuelle Daten (EZB/Eurostat): " + "; ".join(
+        f"{x['name']} {x['price']}{x['unit']}" for x in m.get("items", []) if x["kind"] in ("rate", "inflation"))
 
 
 # ------------------------------------------------------------------ Wetter (DWD via Bright Sky)

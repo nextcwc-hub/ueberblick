@@ -79,21 +79,26 @@ class Article {
 }
 
 class Market {
-  final String sym, name, kind, cur;
+  final String sym, name, kind, cur, unit, freq;
   final double price, prev, pct;
-  final double? open, high, low, yhigh, ylow;
+  final bool pp; // Veränderung in Prozentpunkten (Zinsen, Inflation)
+  final int digits;
+  final double? high, low, yhigh, ylow;
   final DateTime? time;
   final List<double> spark;
   final List<String> alias;
   Market(Map j)
       : sym = j['sym'],
         name = j['name'],
-        kind = j['kind'] ?? 'index',
+        kind = j['kind'] ?? 'fx',
         cur = j['cur'] ?? '',
+        unit = j['unit'] ?? '',
+        freq = j['freq'] ?? 'D',
         price = (j['price'] as num).toDouble(),
         prev = (j['prev'] as num).toDouble(),
         pct = (j['pct'] as num).toDouble(),
-        open = (j['open'] as num?)?.toDouble(),
+        pp = j['pp'] == true,
+        digits = (j['digits'] as num?)?.toInt() ?? 2,
         high = (j['high'] as num?)?.toDouble(),
         low = (j['low'] as num?)?.toDouble(),
         yhigh = (j['yhigh'] as num?)?.toDouble(),
@@ -102,7 +107,7 @@ class Market {
         spark = [for (final v in (j['spark'] ?? const [])) (v as num).toDouble()],
         alias = List<String>.from(j['alias'] ?? const []);
 
-  int get digits => kind == 'fx' ? 4 : (kind == 'bond' ? 3 : 2);
+  bool get monthly => freq == 'M';
 }
 
 class MarketDetail {

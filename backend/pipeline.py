@@ -166,7 +166,7 @@ def main(out: Path):
             reports.append(r)
         prev = stories.get(ev["id"])
         imgs = [] if prev and prev.get("img") else media.commons_candidates(ev.get("iq", ""))
-        extra = mbrief if ev["cat"] in ("boerse", "wirtschaft") else ""
+        extra = mbrief if ev["cat"] in ("boerse", "wirtschaft") else ""  # nur freie EZB-Daten
         if m["items"] and ev["cat"] in ("boerse", "wirtschaft", "digital", "ausland", "inland"):
             extra += "\n\n" + alist
         return ev, llm.write(ev, reports, prev, imgs, extra, now_str()), imgs

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'data.dart';
 import 'screens/home.dart';
@@ -10,6 +11,8 @@ import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Schriften sind in der App enthalten – keine Verbindung zu Google-Servern (Datenschutz)
+  GoogleFonts.config.allowRuntimeFetching = false;
   try {
     await app.init().timeout(const Duration(seconds: 4));
   } catch (_) {}
