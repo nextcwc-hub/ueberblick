@@ -5,7 +5,9 @@ oder Anthropic Claude (ANTHROPIC_API_KEY).
 """
 import json
 import os
+import re
 import threading
+import time
 
 CATS = ["inland", "ausland", "wirtschaft", "boerse", "wissen", "digital", "investigativ", "sport", "wetter"]
 
@@ -71,17 +73,25 @@ class QuotaError(Exception):
 
 def _gemini(model, system, user, schema, max_tokens):
     from google.genai import errors, types
-    try:
-        resp = client().models.generate_content(
-            model=model, contents=user,
-            config=types.GenerateContentConfig(
-                system_instruction=system, response_mime_type="application/json",
-                response_json_schema=schema, max_output_tokens=max_tokens, temperature=0.4))
-    except errors.ClientError as e:
-        if e.code == 429:
-            raise QuotaError() from e
-        raise
-    return resp.text
+    for attempt in range(3):
+        try:
+            resp = client().models.generate_content(
+                model=model, contents=user,
+                config=types.GenerateContentConfig(
+                    system_instruction=system, response_mime_type="application/json",
+                    response_json_schema=schema, max_output_tokens=max_tokens, temperature=0.4))
+            return resp.text
+        except errors.ClientError as e:
+            if e.code != 429:
+                raise
+            msg = str(e)
+            if "PerDay" in msg or attempt == 2:
+                raise QuotaError() from e
+            # Minutenlimit: kurz warten und erneut versuchen
+            m = re.search(r"retry in ([\d.]+)s|retryDelay['\"]?: ?['\"](\d+)s", msg)
+            wait = float(next(g for g in m.groups() if g)) if m else 30
+            print(f"  Minutenlimit {model}, warte {wait:.0f}s")
+            time.sleep(min(wait + 1, 65))
 
 
 def _anthropic(model, system, user, schema, effort, max_tokens):

@@ -150,7 +150,7 @@ def main(out: Path):
         extra = mbrief if ev["cat"] in ("boerse", "wirtschaft") else ""
         return ev, llm.write(ev, reports, prev, imgs, extra, now_str()), imgs
 
-    with ThreadPoolExecutor(2 if FREE else 4) as ex:
+    with ThreadPoolExecutor(1 if FREE else 4) as ex:
         results = list(ex.map(job, todo))
 
     for ev, res, imgs in results:
