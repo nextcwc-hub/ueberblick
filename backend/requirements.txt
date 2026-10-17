@@ -1,0 +1,6 @@
+anthropic>=1.15
+google-genai>=2.31
+feedparser
+httpx
+trafilatura
+tzdata

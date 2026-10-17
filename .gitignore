@@ -1,0 +1,8 @@
+app/build/
+app/.dart_tool/
+app/android/.gradle/
+app/android/local.properties
+__pycache__/
+out/
+*.iml
+.idea/
