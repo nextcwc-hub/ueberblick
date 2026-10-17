@@ -117,7 +117,7 @@ class HomeScreenState extends State<HomeScreen> {
           ),
           if (newCount > 0 && !timeline)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 128,
+              bottom: 16,
               left: 0,
               right: 0,
               child: Center(

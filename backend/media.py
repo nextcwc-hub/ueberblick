@@ -72,7 +72,7 @@ INSTRUMENTS = [
     ("^NDX", "Nasdaq 100", "index", ["Nasdaq"]),
     ("^N225", "Nikkei 225", "index", ["Nikkei"]),
     ("^HSI", "Hang Seng", "index", ["Hang Seng", "Hongkonger Börse"]),
-    ("EURUSD=X", "Euro / Dollar", "fx", ["Euro", "Dollar", "Wechselkurs"]),
+    ("EURUSD=X", "Euro / Dollar", "fx", ["Wechselkurs", "Eurokurs", "Euro-Kurs", "Dollarkurs", "Dollar-Kurs", "Devisen"]),
     ("EURGBP=X", "Euro / Pfund", "fx", ["Pfund", "Sterling"]),
     ("EURCHF=X", "Euro / Franken", "fx", ["Franken"]),
     ("EURJPY=X", "Euro / Yen", "fx", ["Yen"]),

@@ -290,7 +290,9 @@ class AppState extends ChangeNotifier {
   List<Story> relatedStories(Market m) {
     final pats = [
       for (final a in m.alias)
-        RegExp('(^|[^A-Za-zÄÖÜäöüß])${RegExp.escape(a)}', caseSensitive: a.length > 4 ? false : true)
+        // kurze Kürzel (DAX, Dow, Öl) nur als ganzes Wort, längere Namen auch als Wortanfang (Goldpreis)
+        RegExp('(^|[^A-Za-zÄÖÜäöüß])${RegExp.escape(a)}${a.length <= 4 ? '(?![a-zäöüß])' : ''}',
+            caseSensitive: a.length <= 4)
     ];
     final cats = {'boerse', 'wirtschaft', 'digital', 'ausland', 'inland'};
     final l = stories.where((s) {
