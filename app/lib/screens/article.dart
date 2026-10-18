@@ -71,20 +71,28 @@ class ArticleView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (s.img != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: s.img!.src.isEmpty ? null : () => _open(s.img!.src),
-                    child: Text('Foto: ${s.img!.credit}, ${s.img!.license}',
-                        textAlign: TextAlign.right, style: sans(context, 10.5, color: muted(context))),
-                  ),
-                ),
+                Align(alignment: Alignment.centerRight, child: ImageCredit(s.img!)),
               const SizedBox(height: 14),
               Kicker(s, showTime: false),
               const SizedBox(height: 8),
               Text(s.title, style: serif(context, 28, w: FontWeight.w700, h: 1.15)),
               const SizedBox(height: 12),
               Text(s.teaser, style: sans(context, 16.5, w: FontWeight.w500, h: 1.45)),
+              if (s.correctedAt != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE59A0C).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Korrektur (${clock(s.correctedAt!)}): ${s.correctedNote.isEmpty ? 'Der Text wurde nach einer Prüfung berichtigt.' : s.correctedNote}',
+                    style: sans(context, 13, h: 1.45),
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               Text(
                 'Stand: ${clock(s.updated)}${s.ver > 1 ? ' · ${s.ver}. Fassung' : ''} · ${s.srcn == 1 ? '1 Quelle' : '${s.srcn} Quellen'}',
@@ -342,7 +350,9 @@ class _Sources extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Dieser Text wurde von einer KI eigenständig auf Basis der genannten Berichte verfasst und wird bei neuen Entwicklungen aktualisiert. Trotz Sorgfalt sind Fehler möglich.',
+              'Dieser Text wurde von einer KI eigenständig auf Basis der genannten Berichte verfasst und wird bei neuen Entwicklungen aktualisiert.'
+              '${s.checked ? ' Ein zweites KI-Modell hat ihn gegen die Quellen geprüft.' : ''}'
+              ' Trotz Sorgfalt sind Fehler möglich.',
               style: sans(context, 12, color: muted(context), h: 1.5),
             ),
           ),

@@ -158,26 +158,26 @@ def main(out: Path):
     alist = "MARKTWERTE für assets (Kürzel = Name): " + ", ".join(f"{x['sym']} = {x['name']}" for x in m["items"])
 
     def job(ev):
-        its = sorted(ev["items"], key=lambda i: (not sources.tdm_allowed(i["u"]), -i["p"]))[:8]
-        reports, fetched = [], 0
-        for i in its:
-            r = {"s": i["s"], "t": i["t"], "d": fresh.get(i["h"], {}).get("d", "")}
-            if fetched < 4:
-                r["full"] = sources.fetch_text(i["u"])
-                fetched += 1 if r["full"] else 0
-            reports.append(r)
+        reports = build_reports(ev, fresh)
         prev = stories.get(ev["id"])
         imgs = [] if prev and prev.get("img") else media.commons_candidates(ev.get("iq", ""))
         extra = mbrief if ev["cat"] in ("boerse", "wirtschaft") else ""  # nur freie EZB-Daten
         if m["items"] and ev["cat"] in ("boerse", "wirtschaft", "digital", "ausland", "inland"):
             extra += "\n\n" + alist
-        return ev, llm.write(ev, reports, prev, imgs, extra, now_str()), imgs
+        res = llm.write(ev, reports, prev, imgs, extra, now_str())
+        if res:  # zweite KI prüft vor der Veröffentlichung gegen die Quellen
+            res = llm.apply_review(res, llm.review(res, reports, now_str()))
+        return ev, res, imgs
 
     with ThreadPoolExecutor(1 if FREE else 4) as ex:
         results = list(ex.map(job, todo))
 
     for ev, res, imgs in results:
         if not res:
+            continue
+        if res.get("_drop") or (res.get("sensitive") and not res.get("checked")):
+            # vom Faktencheck verworfen oder heikel und ungeprüft -> zurückhalten
+            ev["hold"] = True
             continue
         if res.get("sensitive") and len(distinct_sources(ev)) < 2:
             # Vorwürfe gegen Personen/Unternehmen erst veröffentlichen, wenn mindestens zwei Medien berichten
@@ -189,6 +189,33 @@ def main(out: Path):
         ev.update(written=True, written_n=len(ev["items"]), last_write=now,
                   cat=res["cat"], imp=max(1, min(10, res["imp"])))
         state["writes"][today] = state["writes"].get(today, 0) + 1
+
+    # ---- Nachprüfung bereits veröffentlichter, noch ungeprüfter Artikel (2 pro Lauf)
+    unchecked = sorted((x for x in stories.values() if not x.get("checked") and x["cat"] != "wetter"
+                        and x["id"] in events), key=lambda x: -x["imp"])[:2]
+    for st in unchecked:
+        ev = events[st["id"]]
+        art = load(v1 / "a" / f"{st['id']}.json", {})
+        if not art:
+            continue
+        cur = {**st, **art}
+        rev = llm.review(cur, build_reports(ev, fresh), now_str())
+        if not rev:
+            break  # Kontingent erschöpft
+        if rev["action"] == "remove":
+            print(f"  Nachprüfung: entfernt {st['title'][:60]}")
+            state.setdefault("removed", []).append(st["id"])
+            ev["hold"] = True
+            continue
+        if rev["action"] == "correct" and rev["title"].strip() and rev["sections"]:
+            print(f"  Nachprüfung: korrigiert {st['title'][:60]}")
+            st.update(title=rev["title"].strip(), teaser=rev["teaser"].strip(),
+                      summary=[x for x in rev["summary"] if x.strip()][:5], ver=st.get("ver", 1) + 1,
+                      updated=int(now), corrected={"at": int(now), "note": rev["note"].strip()})
+            save(v1 / "a" / f"{st['id']}.json", {
+                "id": st["id"], "sections": rev["sections"], "facts": rev["facts"],
+                "positions": rev["positions"], "outlook": rev["outlook"].strip()})
+        st["checked"] = True
 
     # ---- Stimmung für ältere Artikel ohne Einordnung nachtragen
     missing = [s for s in stories.values() if "tone" not in s][:30]
@@ -235,6 +262,7 @@ def publish(v1: Path, stories: dict, ev: dict, res: dict, imgs: list, now: float
         "imp": max(1, min(10, res["imp"])), "srcn": len(srcs), "sources": srcs[:12],
         "loc": res["location"].strip(), "ver": prev.get("ver", 0) + 1,
         "tone": res.get("tone", "neutral"),
+        "checked": bool(res.get("checked")),
         "assets": res.get("assets", []),
     }
     save(v1 / "a" / f"{ev['id']}.json", {
@@ -277,8 +305,21 @@ def blocklist() -> set[str]:
     return {ln.split("#")[0].strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.split("#")[0].strip()}
 
 
+def build_reports(ev: dict, fresh: dict) -> list[dict]:
+    """Berichte zu einem Ereignis: Schlagzeilen, erlaubte Anreißer und bis zu 4 erlaubte Volltexte."""
+    its = sorted(ev["items"], key=lambda i: (not sources.tdm_allowed(i["u"]), -i["p"]))[:8]
+    reports, fetched = [], 0
+    for i in its:
+        r = {"s": i["s"], "t": i["t"], "d": fresh.get(i["h"], {}).get("d", "")}
+        if fetched < 4:
+            r["full"] = sources.fetch_text(i["u"])
+            fetched += 1 if r["full"] else 0
+        reports.append(r)
+    return reports
+
+
 def apply_blocklist(v1: Path, state: dict, stories: dict):
-    blocked = blocklist()
+    blocked = blocklist() | set(state.get("removed", []))
     if not blocked:
         return
     for sid in blocked:
@@ -302,6 +343,7 @@ def finish(out: Path, v1: Path, state: dict, stories: dict, now: float):
     state["events"] = {k: e for k, e in state["events"].items() if now - e["last_item"] < KEEP_H * 3600}
     state["seen"] = {k: t for k, t in state["seen"].items() if now - t < 48 * 3600}
     state["writes"] = dict(sorted(state["writes"].items())[-7:])
+    state["removed"] = state.get("removed", [])[-300:]
     ordered = sorted(stories.values(), key=lambda s: -s["updated"])[:500]
     save(v1 / "index.json", {"generated": int(now), "stories": ordered})
     save(out / "state.json", state)

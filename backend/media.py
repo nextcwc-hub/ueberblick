@@ -53,15 +53,26 @@ def commons_candidates(query: str, n: int = 6) -> list[dict]:
         desc = clean(em.get("ImageDescription", {}).get("value", ""))
         if not _matches(query, p["title"] + " " + desc):
             continue  # Bild hat erkennbar nichts mit dem Suchbegriff zu tun
-        artist = clean(em.get("Artist", {}).get("value", "")) or "Unbekannt"
+        artist = clean(em.get("Artist", {}).get("value", ""))
+        free = lic.lower().startswith(("cc0", "public domain", "pd"))
+        # Ohne eindeutigen Urheber lässt sich die Lizenz nicht korrekt erfüllen -> Bild nicht verwenden
+        if not free and (not artist or re.search(r"unknown|unbekannt|anonym", artist, re.I)):
+            continue
+        # Bilder mit Zusatzbeschränkungen (Persönlichkeits-, Marken-, Panoramarechte usw.) meiden
+        if clean(em.get("Restrictions", {}).get("value", "")):
+            continue
+        title = p["title"].removeprefix("File:").rsplit(".", 1)[0][:120]
         out.append({
-            "title": p["title"].removeprefix("File:").rsplit(".", 1)[0][:120],
-            "desc": clean(em.get("ImageDescription", {}).get("value", ""))[:200],
+            "title": title,
+            "desc": desc[:200],
             "img": {
                 "url": ii.get("thumburl") or ii["url"],
                 "w": ii.get("thumbwidth", w), "h": ii.get("thumbheight", h),
-                "credit": f"{artist[:80]} / Wikimedia Commons",
+                "author": artist[:80] if artist else "",
+                "credit": f"{artist[:80] or 'gemeinfrei'} / Wikimedia Commons",
+                "title": title,
                 "license": lic,
+                "license_url": em.get("LicenseUrl", {}).get("value", ""),
                 "src": ii.get("descriptionurl", ""),
             },
         })

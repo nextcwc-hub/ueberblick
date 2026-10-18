@@ -19,6 +19,9 @@ _DEFAULTS = {
 CLUSTER_MODEL = os.environ.get("CLUSTER_MODEL") or _DEFAULTS[0]
 WRITER_MODEL = os.environ.get("WRITER_MODEL") or _DEFAULTS[1]
 WRITER_FALLBACK = os.environ.get("WRITER_FALLBACK_MODEL") or _DEFAULTS[2]
+# Faktencheck bewusst mit einem anderen Modell als der Autor, damit sich Fehler nicht wiederholen
+REVIEW_MODEL = os.environ.get("REVIEW_MODEL") or {"gemini": "gemini-3.6-flash", "anthropic": "claude-sonnet-5-5"}[PROVIDER]
+REVIEW_FALLBACK = os.environ.get("REVIEW_FALLBACK_MODEL") or {"gemini": "gemini-3.1-flash-lite", "anthropic": None}[PROVIDER]
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-fable-5-1"}
 
 _client = None
@@ -292,3 +295,71 @@ def tones(items: list[dict]) -> dict | None:
     user = "\n".join(f"{x['id']} | {x['title']} | {x['teaser']}" for x in items)
     res = ask_json(CLUSTER_MODEL, system, user, TONE_SCHEMA, "low", 4000)
     return {x["id"]: x["tone"] for x in res["items"]} if res else None
+
+
+# ---------------------------------------------------------------- Faktencheck
+
+REVIEW_SYSTEM = """Du bist Faktenprüfer einer neutralen deutschen Nachrichten-App. Du prüfst einen von einer KI geschriebenen Artikel Satz für Satz gegen die mitgelieferten Medienberichte.
+
+Suche nach:
+- Behauptungen, die in den Berichten nicht belegt sind (erfundene Details, Zahlen, Zitate, Daten, Orte, Namen),
+- falschen Zahlen, Namen, Ämtern, Daten oder falsch zugeordneten Aussagen,
+- Vorverurteilungen, unbelegten Vorwürfen gegen Personen oder Unternehmen, Nennung von Privatpersonen, Opfern oder Tatverdächtigen,
+- wertender oder einseitiger Sprache, fehlenden Gegenpositionen bei Kontroversen,
+- wörtlich aus den Berichten übernommenen Sätzen.
+
+Besondere Vorsicht bei Personen: Jede Aussage über eine benannte oder erkennbare Person (Handlungen, Zitate, Ämter, Vorwürfe, Gesundheit, Privates) muss ausdrücklich in mindestens einem Bericht stehen. Bist du nicht sicher, dass eine solche Aussage belegt und korrekt zugeordnet ist, streiche sie. Vorwürfe müssen als Vorwurf gekennzeichnet und der Quelle zugeordnet sein; fehlt die Stellungnahme der Betroffenen, darf nichts als feststehend dargestellt werden.
+
+Grundsatz: Im Zweifel streichen oder abschwächen, nie stehen lassen.
+
+Allgemeines, zeitloses Hintergrundwissen ist kein Fehler. Stilfragen ohne inhaltliche Bedeutung ignorieren.
+
+action:
+- "ok": keine relevanten Fehler. Alle Textfelder leer bzw. leere Listen lassen.
+- "correct": Fehler gefunden, die sich beheben lassen. Liefere die vollständige korrigierte Fassung in allen Textfeldern. Ändere nur, was nötig ist (unbelegtes streichen oder richtigstellen), alles andere unverändert übernehmen. note: ein kurzer, sachlicher Satz für Leser, was korrigiert wurde.
+- "remove": Der Kern der Meldung ist nicht belegt oder sie ist rechtlich heikel und lässt sich durch Streichen nicht retten.
+issues: kurze Liste der gefundenen Probleme (leer bei ok)."""
+
+REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string", "enum": ["ok", "correct", "remove"]},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "note": {"type": "string"},
+        **{k: WRITER_SCHEMA["properties"][k] for k in
+           ("title", "teaser", "summary", "sections", "facts", "positions", "outlook")},
+    },
+    "required": ["action", "issues", "note", "title", "teaser", "summary", "sections", "facts", "positions", "outlook"],
+    "additionalProperties": False,
+}
+
+
+def review(article: dict, reports: list[dict], now_str: str):
+    """Prüft einen Artikel gegen die Berichte. Gibt das Prüfergebnis zurück oder None (z. B. Kontingent erschöpft)."""
+    art = {k: article.get(k) for k in ("title", "teaser", "summary", "sections", "facts", "positions", "outlook")}
+    rep = []
+    for n, r in enumerate(reports, 1):
+        block = f"[Bericht {n} – {r['s']}]\nSchlagzeile: {r['t']}\nAnreißer: {r.get('d', '')}"
+        if r.get("full"):
+            block += f"\nText:\n{r['full']}"
+        rep.append(block)
+    user = (f"Aktuelle Zeit: {now_str}\n\nZU PRÜFENDER ARTIKEL (JSON):\n{json.dumps(art, ensure_ascii=False)}\n\n"
+            "MEDIENBERICHTE:\n\n" + "\n\n".join(rep))
+    return ask_json(REVIEW_MODEL, REVIEW_SYSTEM, user, REVIEW_SCHEMA, "high", 16000, fallback=REVIEW_FALLBACK)
+
+
+def apply_review(res: dict, rev: dict | None) -> dict:
+    """Übernimmt Korrekturen; markiert geprüfte Artikel. res["_drop"] = True bedeutet: nicht veröffentlichen."""
+    if not rev:
+        return res
+    if rev["action"] == "remove":
+        res["_drop"] = True
+        print(f"  Faktencheck: entfernt – {'; '.join(rev['issues'])[:160]}")
+        return res
+    if rev["action"] == "correct" and rev["title"].strip() and rev["sections"]:
+        for k in ("title", "teaser", "summary", "sections", "facts", "positions", "outlook"):
+            res[k] = rev[k]
+        res["_note"] = rev["note"].strip()
+        print(f"  Faktencheck: korrigiert – {'; '.join(rev['issues'])[:160]}")
+    res["checked"] = True
+    return res

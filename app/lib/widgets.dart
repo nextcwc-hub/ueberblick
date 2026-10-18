@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'data.dart';
 import 'models.dart';
@@ -126,7 +127,8 @@ class HeroCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           AspectRatio(aspectRatio: 16 / 9, child: StoryImage(s, large: true, radius: 8)),
-          const SizedBox(height: 12),
+          if (s.img != null) Padding(padding: const EdgeInsets.only(top: 4), child: ImageCredit(s.img!, compact: true)),
+          const SizedBox(height: 10),
           Kicker(s),
           const SizedBox(height: 6),
           Text(s.title, style: serif(context, 25, w: FontWeight.w700, h: 1.18)),
@@ -182,12 +184,96 @@ class StoryTile extends StatelessWidget {
             ]),
           ),
           const SizedBox(width: 14),
-          SizedBox(width: 92, height: 92, child: StoryImage(s)),
+          SizedBox(
+            width: 92,
+            child: Column(children: [
+              SizedBox(width: 92, height: 92, child: StoryImage(s)),
+              if (s.img != null) Padding(padding: const EdgeInsets.only(top: 3), child: ImageCredit(s.img!, compact: true, tiny: true)),
+            ]),
+          ),
         ]),
       ),
     );
   }
 }
+
+/// Bildnachweis nach Creative-Commons-Vorgaben: Titel, Urheber, Lizenz mit Link, Quelle, Hinweis auf Bearbeitung.
+class ImageCredit extends StatelessWidget {
+  final Img img;
+  final bool compact, tiny;
+  const ImageCredit(this.img, {super.key, this.compact = false, this.tiny = false});
+
+  String get _short => img.publicDomain ? 'Foto: gemeinfrei' : 'Foto: ${img.author} · ${img.license}';
+
+  @override
+  Widget build(BuildContext context) {
+    final style = sans(context, tiny ? 9 : 10.5, color: muted(context), h: 1.3);
+    if (compact) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => showImageCredit(context, img),
+        child: Text(_short, maxLines: tiny ? 2 : 1, overflow: TextOverflow.ellipsis, style: style,
+            textAlign: tiny ? TextAlign.center : TextAlign.start),
+      );
+    }
+    final link = style.copyWith(decoration: TextDecoration.underline);
+    return Wrap(alignment: WrapAlignment.end, children: [
+      Text(img.publicDomain ? 'Foto: ' : 'Foto: ${img.author}, ', style: style),
+      if (img.title.isNotEmpty) Text('„${img.title}“, ', style: style),
+      GestureDetector(
+        onTap: img.licenseUrl.isEmpty ? null : () => _launch(img.licenseUrl),
+        child: Text(img.publicDomain ? 'gemeinfrei' : img.license, style: img.licenseUrl.isEmpty ? style : link),
+      ),
+      Text(', via ', style: style),
+      GestureDetector(
+        onTap: img.src.isEmpty ? null : () => _launch(img.src),
+        child: Text('Wikimedia Commons', style: img.src.isEmpty ? style : link),
+      ),
+      Text(img.publicDomain ? ' (Ausschnitt)' : ' (Ausschnitt, unter gleicher Lizenz)', style: style),
+    ]);
+  }
+}
+
+Future<void> _launch(String url) async {
+  final u = Uri.tryParse(url);
+  if (u != null) await launchUrl(u, mode: LaunchMode.externalApplication);
+}
+
+void showImageCredit(BuildContext context, Img img) {
+  showModalBottomSheet(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Bildnachweis', style: serif(context, 20, w: FontWeight.w700)),
+          const SizedBox(height: 12),
+          if (img.title.isNotEmpty) _row(context, 'Titel', img.title),
+          _row(context, 'Urheber', img.publicDomain && img.author.isEmpty ? 'gemeinfrei' : img.author),
+          _row(context, 'Lizenz', img.license),
+          _row(context, 'Quelle', 'Wikimedia Commons'),
+          _row(context, 'Bearbeitung', 'Bildausschnitt für die Darstellung in der App'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, children: [
+            if (img.licenseUrl.isNotEmpty)
+              OutlinedButton(onPressed: () => _launch(img.licenseUrl), child: const Text('Lizenztext')),
+            if (img.src.isNotEmpty)
+              OutlinedButton(onPressed: () => _launch(img.src), child: const Text('Originalbild')),
+          ]),
+        ]),
+      ),
+    ),
+  );
+}
+
+Widget _row(BuildContext context, String k, String v) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 96, child: Text(k, style: sans(context, 13, color: muted(context)))),
+        Expanded(child: Text(v, style: sans(context, 13.5, w: FontWeight.w500))),
+      ]),
+    );
 
 /// Kurz/Ausführlich-Umschalter
 class ModeSwitch extends StatelessWidget {

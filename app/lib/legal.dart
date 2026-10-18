@@ -35,7 +35,8 @@ const _impressum = [
   ),
   (
     'Haftung für Inhalte',
-    'Die Texte werden automatisiert erstellt und vor der Veröffentlichung nicht einzeln von Menschen geprüft. '
+    'Die Texte werden automatisiert erstellt und von einem zweiten KI-Modell gegen die Quellen geprüft, aber nicht '
+        'einzeln von Menschen kontrolliert. '
         'Für Richtigkeit, Vollständigkeit und Aktualität wird keine Gewähr übernommen. Die Inhalte dienen der '
         'allgemeinen Information und sind keine Rechts-, Finanz-, Anlage- oder medizinische Beratung. Maßgeblich '
         'sind die verlinkten Originalberichte und amtlichen Quellen.\n\n'

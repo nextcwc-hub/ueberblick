@@ -1,14 +1,29 @@
 import 'dart:math';
 
 class Img {
-  final String url, credit, license, src;
+  final String url, credit, license, src, author, title, licenseUrl;
   final double ratio;
   Img(Map j)
       : url = j['url'] ?? '',
         credit = j['credit'] ?? '',
         license = j['license'] ?? '',
         src = j['src'] ?? '',
+        author = (j['author'] as String?)?.trim().isNotEmpty == true
+            ? j['author']
+            : ((j['credit'] ?? '') as String).split(' / ').first,
+        title = j['title'] ?? '',
+        licenseUrl = (j['license_url'] as String?)?.isNotEmpty == true ? j['license_url'] : _licUrl(j['license'] ?? ''),
         ratio = ((j['w'] ?? 16) as num) / max(1, ((j['h'] ?? 9) as num));
+
+  bool get publicDomain => RegExp(r'^(cc0|public domain|pd)', caseSensitive: false).hasMatch(license);
+
+  /// Link zum Lizenztext aus dem Kurznamen ableiten (z. B. „CC BY-SA 3.0 de“).
+  static String _licUrl(String l) {
+    final m = RegExp(r'cc (by(?:-sa)?) (\d\.\d)(?: ([a-z]{2}))?', caseSensitive: false).firstMatch(l);
+    if (m == null) return l.toLowerCase().startsWith('cc0') ? 'https://creativecommons.org/publicdomain/zero/1.0/deed.de' : '';
+    final port = m.group(3) == null ? '' : '${m.group(3)!.toLowerCase()}/';
+    return 'https://creativecommons.org/licenses/${m.group(1)!.toLowerCase()}/${m.group(2)}/${port}deed.de';
+  }
 }
 
 class Source {
@@ -22,6 +37,9 @@ class Story {
   final Map<String, dynamic> raw;
   final String id, cat, title, teaser, loc, tone;
   final List<String> assets;
+  final bool checked;
+  final DateTime? correctedAt;
+  final String correctedNote;
   final List<String> summary;
   final Img? img;
   final DateTime created, updated;
@@ -36,6 +54,11 @@ class Story {
         loc = raw['loc'] ?? '',
         tone = raw['tone'] ?? 'neutral',
         assets = List<String>.from(raw['assets'] ?? const []),
+        checked = raw['checked'] == true,
+        correctedAt = raw['corrected'] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(((raw['corrected']['at'] ?? 0) as num).toInt() * 1000),
+        correctedNote = raw['corrected']?['note'] ?? '',
         summary = List<String>.from(raw['summary'] ?? const []),
         img = raw['img'] == null ? null : Img(raw['img']),
         created = DateTime.fromMillisecondsSinceEpoch((raw['created'] as num).toInt() * 1000),
