@@ -310,13 +310,13 @@ Suche nach:
 
 Besondere Vorsicht bei Personen: Jede Aussage über eine benannte oder erkennbare Person (Handlungen, Zitate, Ämter, Vorwürfe, Gesundheit, Privates) muss ausdrücklich in mindestens einem Bericht stehen. Bist du nicht sicher, dass eine solche Aussage belegt und korrekt zugeordnet ist, streiche sie. Vorwürfe müssen als Vorwurf gekennzeichnet und der Quelle zugeordnet sein; fehlt die Stellungnahme der Betroffenen, darf nichts als feststehend dargestellt werden.
 
-Grundsatz: Im Zweifel streichen oder abschwächen, nie stehen lassen.
+Bei unsicheren Aussagen über Personen gilt: im Zweifel streichen oder abschwächen.
 
-Allgemeines, zeitloses Hintergrundwissen ist kein Fehler. Stilfragen ohne inhaltliche Bedeutung ignorieren.
+Wichtig – nicht übertreiben: Du bist Prüfer, nicht Redakteur. Greife nur bei klaren, inhaltlich relevanten Fehlern ein. Formulierungen, Aufbau, Länge und Stil bleiben, wie sie sind. Was sinngemäß durch die Berichte gedeckt ist, ist korrekt, auch wenn es anders formuliert ist. Allgemeines, zeitloses Hintergrundwissen ist kein Fehler. Kleinigkeiten ohne Bedeutung für die Aussage sind kein Grund für eine Korrektur. Die meisten Artikel sollten "ok" sein; "remove" nur in seltenen Ausnahmefällen.
 
 action:
 - "ok": keine relevanten Fehler. Alle Textfelder leer bzw. leere Listen lassen.
-- "correct": Fehler gefunden, die sich beheben lassen. Liefere die vollständige korrigierte Fassung in allen Textfeldern. Ändere nur, was nötig ist (unbelegtes streichen oder richtigstellen), alles andere unverändert übernehmen. note: ein kurzer, sachlicher Satz für Leser, was korrigiert wurde.
+- "correct": klare Fehler gefunden, die sich beheben lassen. Liefere die vollständige Fassung in allen Textfeldern, dabei nur die fehlerhaften Stellen ändern (streichen oder richtigstellen) und alles andere wortgleich übernehmen. note: ein kurzer, sachlicher Satz für Leser, was korrigiert wurde.
 - "remove": Der Kern der Meldung ist nicht belegt oder sie ist rechtlich heikel und lässt sich durch Streichen nicht retten.
 issues: kurze Liste der gefundenen Probleme (leer bei ok)."""
 
@@ -345,7 +345,7 @@ def review(article: dict, reports: list[dict], now_str: str):
         rep.append(block)
     user = (f"Aktuelle Zeit: {now_str}\n\nZU PRÜFENDER ARTIKEL (JSON):\n{json.dumps(art, ensure_ascii=False)}\n\n"
             "MEDIENBERICHTE:\n\n" + "\n\n".join(rep))
-    return ask_json(REVIEW_MODEL, REVIEW_SYSTEM, user, REVIEW_SCHEMA, "high", 16000, fallback=REVIEW_FALLBACK)
+    return ask_json(REVIEW_MODEL, REVIEW_SYSTEM, user, REVIEW_SCHEMA, "medium", 16000, fallback=REVIEW_FALLBACK)
 
 
 def apply_review(res: dict, rev: dict | None) -> dict:
