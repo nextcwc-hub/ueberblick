@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'i18n.dart';
 import 'theme.dart';
 
 // Angaben der verantwortlichen Person (Pflicht für Nachrichtenangebote nach § 18 Abs. 2 MStV).
@@ -74,6 +75,12 @@ const _datenschutz = [
         'auf etwa einen Kilometer gerundet; genaue Koordinaten verlassen das Gerät nicht.'
   ),
   (
+    'Übersetzung',
+    'Wählst du eine andere Sprache als Deutsch, lädt die App einmalig ein Sprachpaket von Google (ML Kit) herunter. '
+        'Dabei wird deine IP-Adresse an Google übermittelt. Die Übersetzung selbst findet ausschließlich auf deinem '
+        'Gerät statt; Artikeltexte werden nicht an Google gesendet.'
+  ),
+  (
     'Speicherung auf dem Gerät',
     'Einstellungen, gewählter Ort, Merkliste und ein Zwischenspeicher der Nachrichten werden nur lokal auf dem '
         'Gerät gespeichert und beim Deinstallieren der App gelöscht.'
@@ -100,8 +107,13 @@ class LegalScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = privacy ? _datenschutz : _impressum;
     return Scaffold(
-      appBar: AppBar(title: Text(privacy ? 'Datenschutz' : 'Impressum', style: serif(context, 21, w: FontWeight.w700))),
+      appBar: AppBar(title: Text(privacy ? t('Datenschutz') : t('Impressum'), style: serif(context, 21, w: FontWeight.w700))),
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 40), children: [
+        if (uiEn) ...[
+          Text(t('Rechtliche Angaben gelten nach deutschem Recht und sind daher auf Deutsch.'),
+              style: sans(context, 13.5, w: FontWeight.w600)),
+          const SizedBox(height: 16),
+        ],
         for (final (h, t) in items) ...[
           Text(h, style: sans(context, 15, w: FontWeight.w700)),
           const SizedBox(height: 6),

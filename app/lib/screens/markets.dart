@@ -7,6 +7,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'home.dart';
+import '../i18n.dart';
 
 String fmtPrice(Market m) => '${fmtNum(m.price, digits: m.digits)}${m.unit}';
 
@@ -22,10 +23,10 @@ Color mColor(BuildContext c, Market m, [double? v]) => chgColor(c, v ?? m.pct, n
 
 String fmtChg(Market m, [double? v]) {
   final x = v ?? m.pct;
-  return '${x > 0 ? '+' : ''}${fmtNum(x)}${m.pp ? ' Pp.' : ' %'}';
+  return '${x > 0 ? '+' : ''}${fmtNum(x)}${m.pp ? (uiEn ? ' pp' : ' Pp.') : ' %'}';
 }
 
-String sinceLabel(Market m) => m.kind == 'crypto' ? '24 Std.' : (m.monthly ? 'zum Vormonat' : 'zum Vortag');
+String sinceLabel(Market m) => t(m.kind == 'crypto' ? '24 Std.' : (m.monthly ? 'zum Vormonat' : 'zum Vortag'));
 
 const _groups = [('fx', 'Devisen'), ('rate', 'Zinsen'), ('inflation', 'Inflation'), ('crypto', 'Krypto')];
 
@@ -60,7 +61,7 @@ class _MarketsScreenState extends State<MarketsScreen> {
             child: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: Text('Börse & Märkte', style: serif(context, 28, w: FontWeight.w700)),
+                child: Text(t('Börse & Märkte'), style: serif(context, 28, w: FontWeight.w700)),
               ),
               if (ms.isEmpty)
                 Padding(
@@ -68,7 +69,7 @@ class _MarketsScreenState extends State<MarketsScreen> {
                   child: Center(child: Text('Daten werden geladen …', style: sans(context, 14, color: muted(context)))),
                 )
               else ...[
-                const SectionLabel('Auf einen Blick'),
+                SectionLabel(t('Auf einen Blick')),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: GridView.count(
@@ -83,14 +84,14 @@ class _MarketsScreenState extends State<MarketsScreen> {
                 ),
               ],
               if (news.isNotEmpty) ...[
-                const SectionLabel('Börsen- & Wirtschaftsnachrichten'),
+                SectionLabel(t('Börsen- & Wirtschaftsnachrichten')),
                 for (final (i, s) in news.take(6).indexed) ...[
                   if (i > 0) const Divider(indent: 16, endIndent: 16),
                   StoryTile(s, onTap: () => openStory(context, news, i)),
                 ],
               ],
               if (ms.isNotEmpty) ...[
-                const SectionLabel('Alle Werte'),
+                SectionLabel(t('Alle Werte')),
                 SizedBox(
                   height: 36,
                   child: ListView(
@@ -102,7 +103,7 @@ class _MarketsScreenState extends State<MarketsScreen> {
                           Padding(
                             padding: const EdgeInsets.only(right: 6),
                             child: ChoiceChip(
-                              label: Text(label),
+                              label: Text(t(label)),
                               selected: group == id,
                               showCheckmark: false,
                               onSelected: (_) {
@@ -123,8 +124,8 @@ class _MarketsScreenState extends State<MarketsScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
                 child: Text(
-                  'Devisen und Zinsen: Europäische Zentralbank (Referenzkurse, werktäglich ca. 16 Uhr). '
-                  'Inflation: Eurostat. Ohne Gewähr, keine Anlageberatung.',
+                  '${t('Devisen und Zinsen: Europäische Zentralbank (Referenzkurse, werktäglich ca. 16 Uhr). ')}'
+                  '${t('Inflation: Eurostat. Ohne Gewähr, keine Anlageberatung.')}',
                   style: sans(context, 11.5, color: muted(context), h: 1.5),
                 ),
               ),
@@ -159,7 +160,7 @@ class _KeyCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(context, 12.5, w: FontWeight.w600)),
+            Text(t(m.name), maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(context, 12.5, w: FontWeight.w600)),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -190,7 +191,7 @@ class _MarketRow extends StatelessWidget {
           Expanded(
             flex: 5,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(context, 15, w: FontWeight.w600)),
+              Text(t(m.name), maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(context, 15, w: FontWeight.w600)),
               Text(fmtPrice(m), style: sans(context, 13, color: muted(context))),
             ]),
           ),
@@ -236,14 +237,14 @@ class _MarketPageState extends State<MarketPage> {
   List<_Range> _ranges(MarketDetail? d) {
     final m = widget.m;
     if (m.monthly) {
-      return const [_Range('1J', 'in 1 Jahr', 366), _Range('5J', 'in 5 Jahren', 1830), _Range('10J', 'in 10 Jahren', 3660)];
+      return [_Range('1J', t('in 1 Jahr'), 366), _Range('5J', t('in 5 Jahren'), 1830), _Range('10J', t('in 10 Jahren'), 3660)];
     }
     return [
-      if (d != null && d.intraday.length > 2) const _Range('24 Std.', 'in 24 Std.', 0),
-      if (d != null && d.week.length > 2) const _Range('1W', 'in 1 Woche', -1),
-      const _Range('1M', 'in 1 Monat', 31),
-      const _Range('6M', 'in 6 Monaten', 183),
-      const _Range('1J', 'in 1 Jahr', 366),
+      if (d != null && d.intraday.length > 2) _Range(t('24 Std.'), t('in 24 Std.'), 0),
+      if (d != null && d.week.length > 2) _Range('1W', t('in 1 Woche'), -1),
+      _Range('1M', t('in 1 Monat'), 31),
+      _Range('6M', t('in 6 Monaten'), 183),
+      _Range('1J', t('in 1 Jahr'), 366),
     ];
   }
 
@@ -252,7 +253,7 @@ class _MarketPageState extends State<MarketPage> {
     final m = widget.m;
     final related = app.relatedStories(m);
     return Scaffold(
-      appBar: AppBar(title: Text(m.name, style: serif(context, 20, w: FontWeight.w700))),
+      appBar: AppBar(title: Text(t(m.name), style: serif(context, 20, w: FontWeight.w700))),
       body: FutureBuilder<MarketDetail?>(
         future: fut,
         initialData: app.cachedDetail(m.sym),
@@ -342,19 +343,19 @@ class _MarketPageState extends State<MarketPage> {
                 style: sans(context, 12, color: muted(context)),
               ),
             ),
-            const SectionLabel('Kennzahlen'),
+            SectionLabel(t('Kennzahlen')),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _StatsGrid([
-                (m.monthly ? 'Vormonat' : (m.kind == 'crypto' ? 'vor 24 Std.' : 'Vortag'), m.prev),
-                ('Aktuell', m.price),
-                if (m.high != null) ('24-Std.-Hoch', m.high),
-                if (m.low != null) ('24-Std.-Tief', m.low),
-                ('12-Monats-Hoch', m.yhigh),
-                ('12-Monats-Tief', m.ylow),
+                (t(m.monthly ? 'Vormonat' : (m.kind == 'crypto' ? 'vor 24 Std.' : 'Vortag')), m.prev),
+                (t('Aktuell'), m.price),
+                if (m.high != null) (t('24-Std.-Hoch'), m.high),
+                if (m.low != null) (t('24-Std.-Tief'), m.low),
+                (t('12-Monats-Hoch'), m.yhigh),
+                (t('12-Monats-Tief'), m.ylow),
               ], m),
             ),
-            SectionLabel(related.isEmpty ? 'Nachrichten' : 'Nachrichten zu ${m.name}'),
+            SectionLabel(related.isEmpty ? t('Nachrichten') : '${t('Nachrichten zu')} ${t(m.name)}'),
             if (related.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -372,7 +373,7 @@ class _MarketPageState extends State<MarketPage> {
                     ? 'Powered by CoinGecko. Ohne Gewähr, keine Anlageberatung.'
                     : (m.kind == 'inflation'
                         ? 'Quelle: Eurostat (HICP, Veränderung zum Vorjahresmonat).'
-                        : 'Quelle: Europäische Zentralbank. Ohne Gewähr.'),
+                        : t('Quelle: Europäische Zentralbank. Ohne Gewähr.')),
                 style: sans(context, 12, w: FontWeight.w600, color: muted(context)),
               ),
             ),

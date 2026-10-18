@@ -8,6 +8,7 @@ import 'screens/markets.dart';
 import 'screens/saved.dart';
 import 'screens/weather.dart';
 import 'theme.dart';
+import 'i18n.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,11 +104,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             setState(() => tab = i);
           },
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.article_outlined), selectedIcon: Icon(Icons.article), label: 'Nachrichten'),
-            NavigationDestination(icon: Icon(Icons.wb_sunny_outlined), selectedIcon: Icon(Icons.wb_sunny), label: 'Wetter'),
-            NavigationDestination(icon: Icon(Icons.show_chart), selectedIcon: Icon(Icons.insights), label: 'Börse'),
-            NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: 'Gemerkt'),
+          destinations: [
+            NavigationDestination(icon: Icon(Icons.article_outlined), selectedIcon: Icon(Icons.article), label: t('Nachrichten')),
+            NavigationDestination(icon: Icon(Icons.wb_sunny_outlined), selectedIcon: Icon(Icons.wb_sunny), label: t('Wetter')),
+            NavigationDestination(icon: Icon(Icons.show_chart), selectedIcon: Icon(Icons.insights), label: t('Börse')),
+            NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: t('Gemerkt')),
           ],
         ),
       ),

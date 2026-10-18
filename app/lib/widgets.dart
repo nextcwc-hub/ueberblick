@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'data.dart';
 import 'models.dart';
 import 'theme.dart';
+import 'i18n.dart';
 
 /// Für Bildschirmfotos im Test ohne Plugin-Cache.
 bool useImageCache = true;
@@ -101,13 +102,13 @@ class Kicker extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
           decoration: BoxDecoration(color: breaking, borderRadius: BorderRadius.circular(3)),
-          child: Text('EILMELDUNG', style: sans(context, 10, w: FontWeight.w700, ls: 0.6, color: Colors.white)),
+          child: Text(t('EILMELDUNG'), style: sans(context, 10, w: FontWeight.w700, ls: 0.6, color: Colors.white)),
         ),
-      Text(c.name.toUpperCase(), style: Theme.of(context).brightness == Brightness.dark
+      Text(t(c.name).toUpperCase(), style: Theme.of(context).brightness == Brightness.dark
           ? style.copyWith(color: Color.lerp(c.color, Colors.white, 0.35)) : style),
       if (showTime) ...[
         Text('·', style: sans(context, 12, color: muted(context))),
-        Text(s.wasUpdated ? 'aktualisiert ${ago(s.updated)}' : ago(s.created),
+        Text(s.wasUpdated ? '${t('aktualisiert')} ${ago(s.updated)}' : ago(s.created),
             style: sans(context, 12, color: muted(context))),
       ],
     ]);
@@ -149,7 +150,7 @@ class SourceLine extends StatelessWidget {
   Widget build(BuildContext context) => Row(children: [
         Icon(Icons.layers_outlined, size: 14, color: muted(context)),
         const SizedBox(width: 4),
-        Text(s.srcn == 1 ? '1 Quelle' : '${s.srcn} Quellen', style: sans(context, 12, color: muted(context))),
+        Text(nSources(s.srcn), style: sans(context, 12, color: muted(context))),
         if (s.loc.isNotEmpty) ...[
           const SizedBox(width: 10),
           Icon(Icons.place_outlined, size: 14, color: muted(context)),
@@ -203,7 +204,7 @@ class ImageCredit extends StatelessWidget {
   final bool compact, tiny;
   const ImageCredit(this.img, {super.key, this.compact = false, this.tiny = false});
 
-  String get _short => img.publicDomain ? 'Foto: gemeinfrei' : 'Foto: ${img.author} · ${img.license}';
+  String get _short => img.publicDomain ? t('Foto: gemeinfrei') : '${t('Foto: ')}${img.author} · ${img.license}';
 
   @override
   Widget build(BuildContext context) {
@@ -218,18 +219,18 @@ class ImageCredit extends StatelessWidget {
     }
     final link = style.copyWith(decoration: TextDecoration.underline);
     return Wrap(alignment: WrapAlignment.end, children: [
-      Text(img.publicDomain ? 'Foto: ' : 'Foto: ${img.author}, ', style: style),
+      Text(img.publicDomain ? t('Foto: ') : '${t('Foto: ')}${img.author}, ', style: style),
       if (img.title.isNotEmpty) Text('„${img.title}“, ', style: style),
       GestureDetector(
         onTap: img.licenseUrl.isEmpty ? null : () => _launch(img.licenseUrl),
-        child: Text(img.publicDomain ? 'gemeinfrei' : img.license, style: img.licenseUrl.isEmpty ? style : link),
+        child: Text(img.publicDomain ? t('gemeinfrei') : img.license, style: img.licenseUrl.isEmpty ? style : link),
       ),
       Text(', via ', style: style),
       GestureDetector(
         onTap: img.src.isEmpty ? null : () => _launch(img.src),
         child: Text('Wikimedia Commons', style: img.src.isEmpty ? style : link),
       ),
-      Text(img.publicDomain ? ' (Ausschnitt)' : ' (Ausschnitt, unter gleicher Lizenz)', style: style),
+      Text(img.publicDomain ? ' (Ausschnitt)' : t(' (Ausschnitt, unter gleicher Lizenz)'), style: style),
     ]);
   }
 }
@@ -249,11 +250,11 @@ void showImageCredit(BuildContext context, Img img) {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Bildnachweis', style: serif(context, 20, w: FontWeight.w700)),
           const SizedBox(height: 12),
-          if (img.title.isNotEmpty) _row(context, 'Titel', img.title),
-          _row(context, 'Urheber', img.publicDomain && img.author.isEmpty ? 'gemeinfrei' : img.author),
-          _row(context, 'Lizenz', img.license),
+          if (img.title.isNotEmpty) _row(context, t('Titel'), img.title),
+          _row(context, t('Urheber'), img.publicDomain && img.author.isEmpty ? t('gemeinfrei') : img.author),
+          _row(context, t('Lizenz'), img.license),
           _row(context, 'Quelle', 'Wikimedia Commons'),
-          _row(context, 'Bearbeitung', 'Bildausschnitt für die Darstellung in der App'),
+          _row(context, t('Bearbeitung'), t('Bildausschnitt für die Darstellung in der App')),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             if (img.licenseUrl.isNotEmpty)
@@ -314,7 +315,7 @@ class ModeSwitch extends StatelessWidget {
       height: 42,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(color: cs.surfaceContainer, borderRadius: BorderRadius.circular(9)),
-      child: Row(children: [seg('Kurz', false), seg('Ausführlich', true)]),
+      child: Row(children: [seg(t('Kurz'), false), seg(t('Ausführlich'), true)]),
     );
   }
 }

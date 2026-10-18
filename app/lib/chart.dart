@@ -5,15 +5,17 @@ import 'package:flutter/services.dart';
 
 import 'models.dart';
 import 'theme.dart';
+import 'i18n.dart';
 
 enum TimeFmt { intraday, week, days, months }
 
-const _wd = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const _mo = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+List<String> get _wd => weekdaysShort;
+List<String> get _mo => monthsLong;
 
 String fmtTime(DateTime d, TimeFmt f, {bool long = false}) => switch (f) {
-      TimeFmt.intraday => long ? '${_wd[d.weekday - 1]}, ${two(d.day)}.${two(d.month)}., ${two(d.hour)}:${two(d.minute)} Uhr' : '${two(d.hour)}:${two(d.minute)}',
-      TimeFmt.week => long ? '${_wd[d.weekday - 1]}, ${two(d.day)}.${two(d.month)}., ${two(d.hour)}:${two(d.minute)} Uhr' : '${_wd[d.weekday - 1]} ${two(d.hour)}h',
+      TimeFmt.intraday => long ? '${_wd[d.weekday - 1]}, ${two(d.day)}.${two(d.month)}., ${two(d.hour)}:${two(d.minute)}${uiEn ? '' : ' Uhr'}' : '${two(d.hour)}:${two(d.minute)}',
+      TimeFmt.week => long ? '${_wd[d.weekday - 1]}, ${two(d.day)}.${two(d.month)}., ${two(d.hour)}:${two(d.minute)}${uiEn ? '' : ' Uhr'}' : '${_wd[d.weekday - 1]} ${two(d.hour)}h',
       TimeFmt.days => long ? '${_wd[d.weekday - 1]}, ${two(d.day)}.${two(d.month)}.${d.year}' : '${two(d.day)}.${two(d.month)}.',
       TimeFmt.months => long ? '${_mo[d.month - 1]} ${d.year}' : '${two(d.month)}/${d.year % 100}',
     };

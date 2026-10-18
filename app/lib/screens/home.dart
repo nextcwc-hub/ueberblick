@@ -7,9 +7,8 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'article.dart';
 import 'settings.dart';
+import '../i18n.dart';
 
-const weekdaysLong = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-const weekdaysShort = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const monthsLong = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
 ];
@@ -138,7 +137,7 @@ class HomeScreenState extends State<HomeScreen> {
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).colorScheme.onPrimary),
                         const SizedBox(width: 6),
-                        Text(newCount == 1 ? '1 neue Meldung' : '$newCount neue Meldungen',
+                        Text(nNew(newCount),
                             style: sans(context, 13, w: FontWeight.w600, color: Theme.of(context).colorScheme.onPrimary)),
                       ]),
                     ),
@@ -228,8 +227,8 @@ String _longDate(DateTime d) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final diff = today.difference(DateTime(d.year, d.month, d.day)).inDays;
-  final base = '${weekdaysLong[d.weekday - 1]}, ${d.day}. ${monthsLong[d.month - 1]}';
-  return diff == 0 ? 'Heute · $base' : (diff == 1 ? 'Gestern · $base' : base);
+  final base = longDate(d);
+  return diff == 0 ? '${t('Heute')} · $base' : (diff == 1 ? '${t('Gestern')} · $base' : base);
 }
 
 class _DayChip extends StatelessWidget {
@@ -243,7 +242,7 @@ class _DayChip extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final now = DateTime.now();
     final diff = DateTime(now.year, now.month, now.day).difference(date).inDays;
-    final top = diff == 0 ? 'Heute' : (diff == 1 ? 'Gestern' : weekdaysShort[date.weekday - 1]);
+    final top = diff == 0 ? t('Heute') : (diff == 1 ? t('Gestern') : weekdaysShort[date.weekday - 1]);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
@@ -348,7 +347,7 @@ class _Masthead extends StatelessWidget {
             decoration: const BoxDecoration(color: breaking, shape: BoxShape.circle)),
       ]),
       const SizedBox(height: 3),
-      Text('${weekdaysLong[d.weekday - 1]}, ${d.day}. ${monthsLong[d.month - 1]}',
+      Text(longDate(d),
           style: sans(context, 12, color: muted(context), w: FontWeight.w500)),
     ]);
   }
@@ -404,7 +403,7 @@ class _FilterHeader extends SliverPersistentHeaderDelegate {
     Widget seg(SortMode m) {
       final sel = sort == m;
       return Expanded(
-        flex: sortLabels[m]!.length + 4,
+        flex: t(sortLabels[m]!).length + 4,
         child: Material(
           color: sel ? cs.surfaceContainerLowest : Colors.transparent,
           elevation: sel ? 1 : 0,
@@ -423,7 +422,7 @@ class _FilterHeader extends SliverPersistentHeaderDelegate {
                       Icon(Icons.timeline, size: 14, color: sel ? cs.onSurface : muted(context)),
                       const SizedBox(width: 3),
                     ],
-                    Text(sortLabels[m]!,
+                    Text(t(sortLabels[m]!),
                         style: sans(context, 12.5,
                             w: sel ? FontWeight.w700 : FontWeight.w500, color: sel ? cs.onSurface : muted(context))),
                   ]),
@@ -443,7 +442,7 @@ class _FilterHeader extends SliverPersistentHeaderDelegate {
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 6),
-            children: [tab(null, 'Alle'), for (final c in cats) tab(c.id, c.name)],
+            children: [tab(null, t('Alle')), for (final c in cats) tab(c.id, t(c.name))],
           ),
         ),
         const Divider(height: 1),
@@ -487,11 +486,13 @@ class _Empty extends StatelessWidget {
     } else if (app.error != null && app.stories.isEmpty) {
       msg = app.error!;
     } else if (app.stories.isEmpty) {
-      msg = 'Noch keine Meldungen verfügbar.';
+      msg = t('Noch keine Meldungen verfügbar.');
     } else if (app.mood != Mood.all) {
-      msg = 'Gerade keine Meldungen für „${moodLabels[app.mood]}“${cat == null ? '' : ' in „${catOf(cat!).name}“'}.';
+      msg = uiEn
+          ? 'No stories for “${t(moodLabels[app.mood]!)}”${cat == null ? '' : ' in “${t(catOf(cat!).name)}”'} right now.'
+          : 'Gerade keine Meldungen für „${moodLabels[app.mood]}“${cat == null ? '' : ' in „${catOf(cat!).name}“'}.';
     } else {
-      msg = 'Gerade keine Meldungen in „${catOf(cat!).name}“.';
+      msg = uiEn ? 'No stories in “${t(catOf(cat!).name)}” right now.' : 'Gerade keine Meldungen in „${catOf(cat!).name}“.';
     }
     return Padding(
       padding: const EdgeInsets.all(32),
@@ -515,8 +516,8 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
         child: Text(
-          '${app.generated != null && app.generated!.year > 2000 ? 'Stand: ${clock(app.generated!)}\n\n' : ''}'
-          'Alle Texte werden automatisch von einer KI aus mehreren unabhängigen Quellen zusammengestellt und laufend aktualisiert.',
+          '${app.generated != null && app.generated!.year > 2000 ? '${t('Stand')}: ${clock(app.generated!)}\n\n' : ''}'
+          '${t('Alle Texte werden automatisch von einer KI aus mehreren unabhängigen Quellen zusammengestellt und laufend aktualisiert.')}',
           textAlign: TextAlign.center,
           style: sans(context, 12, color: muted(context), h: 1.5),
         ),
@@ -558,11 +559,11 @@ class _MoodButton extends StatelessWidget {
 }
 
 void showMoodSheet(BuildContext context) {
-  const desc = {
-    Mood.all: 'Alle Meldungen anzeigen',
-    Mood.positive: 'Fortschritte, Erfolge, gute Entwicklungen',
-    Mood.noNegative: 'Belastende Meldungen ausblenden',
-    Mood.negative: 'Krisen, Konflikte und Probleme',
+  final desc = {
+    Mood.all: t('Alle Meldungen anzeigen'),
+    Mood.positive: t('Fortschritte, Erfolge, gute Entwicklungen'),
+    Mood.noNegative: t('Belastende Meldungen ausblenden'),
+    Mood.negative: t('Krisen, Konflikte und Probleme'),
   };
   showModalBottomSheet(
     context: context,
@@ -578,7 +579,7 @@ void showMoodSheet(BuildContext context) {
           for (final m in Mood.values)
             ListTile(
               leading: Icon(moodIcons[m]),
-              title: Text(moodLabels[m]!, style: sans(context, 15, w: FontWeight.w600)),
+              title: Text(t(moodLabels[m]!), style: sans(context, 15, w: FontWeight.w600)),
               subtitle: Text(desc[m]!, style: sans(context, 13, color: muted(context))),
               trailing: app.mood == m ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
               onTap: () {
@@ -595,7 +596,7 @@ void showMoodSheet(BuildContext context) {
 }
 
 class _Search extends SearchDelegate<void> {
-  _Search() : super(searchFieldLabel: 'Meldungen durchsuchen');
+  _Search() : super(searchFieldLabel: t('Meldungen durchsuchen'));
 
   @override
   ThemeData appBarTheme(BuildContext context) {

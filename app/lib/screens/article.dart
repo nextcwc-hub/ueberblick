@@ -9,6 +9,7 @@ import '../legal.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../i18n.dart';
 
 class ArticlePager extends StatefulWidget {
   final List<Story> stories;
@@ -88,14 +89,14 @@ class ArticleView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Korrektur (${clock(s.correctedAt!)}): ${s.correctedNote.isEmpty ? 'Der Text wurde nach einer Prüfung berichtigt.' : s.correctedNote}',
+                    '${t('Korrektur')} (${clock(s.correctedAt!)}): ${s.correctedNote.isEmpty || uiEn ? t('Der Text wurde nach einer Prüfung berichtigt.') : s.correctedNote}',
                     style: sans(context, 13, h: 1.45),
                   ),
                 ),
               ],
               const SizedBox(height: 14),
               Text(
-                'Stand: ${clock(s.updated)}${s.ver > 1 ? ' · ${s.ver}. Fassung' : ''} · ${s.srcn == 1 ? '1 Quelle' : '${s.srcn} Quellen'}',
+                '${t('Stand')}: ${clock(s.updated)}${s.ver > 1 ? ' · ${uiEn ? 'version ${s.ver}' : '${s.ver}. Fassung'}' : ''} · ${nSources(s.srcn)}',
                 style: sans(context, 12.5, color: muted(context)),
               ),
             ]),
@@ -105,6 +106,18 @@ class ArticleView extends StatelessWidget {
           pinned: true,
           delegate: _SwitchHeader(cs.surface),
         ),
+        if (app.lang != 'de')
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+              child: Row(children: [
+                Icon(Icons.translate, size: 15, color: muted(context)),
+                const SizedBox(width: 6),
+                Text(s.raw['_tx'] == true ? t('Übersetzt auf dem Gerät') : '…',
+                    style: sans(context, 12, color: muted(context))),
+              ]),
+            ),
+          ),
         SliverToBoxAdapter(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -213,10 +226,10 @@ class _Detailed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cached = app.cachedArticle(s.id);
+    final cached = app.cachedArticleFor(s.id);
     if (cached != null) return _body(context, cached);
     return FutureBuilder<Article?>(
-      future: app.article(s.id),
+      future: app.articleFor(s.id),
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const Padding(
@@ -350,9 +363,9 @@ class _Sources extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Dieser Text wurde von einer KI eigenständig auf Basis der genannten Berichte verfasst und wird bei neuen Entwicklungen aktualisiert.'
-              '${s.checked ? ' Ein zweites KI-Modell hat ihn gegen die Quellen geprüft.' : ''}'
-              ' Trotz Sorgfalt sind Fehler möglich.',
+              '${t('Dieser Text wurde von einer KI eigenständig auf Basis der genannten Berichte verfasst und wird bei neuen Entwicklungen aktualisiert.')}'
+              '${s.checked ? t(' Ein zweites KI-Modell hat ihn gegen die Quellen geprüft.') : ''}'
+              '${t(' Trotz Sorgfalt sind Fehler möglich.')}',
               style: sans(context, 12, color: muted(context), h: 1.5),
             ),
           ),

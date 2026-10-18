@@ -10,6 +10,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'home.dart';
+import '../i18n.dart';
 
 
 
@@ -121,7 +122,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
                   child: Row(children: [
-                    Expanded(child: Text('Wetter', style: serif(context, 26, w: FontWeight.w700))),
+                    Expanded(child: Text(t('Wetter'), style: serif(context, 26, w: FontWeight.w700))),
                     TextButton.icon(
                       onPressed: _pickCity,
                       icon: const Icon(Icons.place_outlined, size: 18),
@@ -163,7 +164,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
       ..sort((a, b) => b.time.compareTo(a.time));
     if (list.isEmpty) return const SizedBox();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const SectionLabel('Wetterbericht Deutschland'),
+      SectionLabel(t('Wetterbericht Deutschland')),
       for (final (i, s) in list.take(4).indexed) ...[
         if (i > 0) const Divider(indent: 16, endIndent: 16),
         StoryTile(s, onTap: () => openStory(context, list, i)),
@@ -192,9 +193,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(temp == null ? '–' : '${temp.round()}°', style: serif(context, 54, w: FontWeight.w600, h: 1.0)),
-              Text(label, style: sans(context, 16, w: FontWeight.w500)),
+              Text(t(label), style: sans(context, 16, w: FontWeight.w500)),
               if (today != null)
-                Text('Heute ${today.min.round()}° bis ${today.max.round()}°', style: sans(context, 13.5, color: muted(context))),
+                Text('${t('Heute')} ${today.min.round()}° ${t('bis')} ${today.max.round()}°', style: sans(context, 13.5, color: muted(context))),
             ]),
           ),
         ]),
@@ -202,21 +203,21 @@ class _WeatherScreenState extends State<WeatherScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
         child: Wrap(spacing: 18, runSpacing: 6, children: [
-          _stat(context, Icons.air, '${((cur['wind_speed_10'] ?? cur['wind_speed_30'] ?? 0) as num).round()} km/h Wind'),
-          _stat(context, Icons.water_drop_outlined, '${cur['relative_humidity'] ?? '–'} % Feuchte'),
+          _stat(context, Icons.air, '${((cur['wind_speed_10'] ?? cur['wind_speed_30'] ?? 0) as num).round()} km/h ${t('Wind')}'),
+          _stat(context, Icons.water_drop_outlined, '${cur['relative_humidity'] ?? '–'} % ${t('Feuchte')}'),
           _stat(context, Icons.umbrella_outlined, '${((cur['precipitation_60'] ?? 0) as num).toStringAsFixed(1)} mm/h'),
         ]),
       ),
       if (w.region.isNotEmpty)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Text('Warnregion: ${w.region}', style: sans(context, 12, color: muted(context))),
+          child: Text('${t('Warnregion')}: ${w.region}', style: sans(context, 12, color: muted(context))),
         ),
       for (final a in w.alerts) _AlertCard(a),
       if (w.radar.length > 3) _Nowcast(w.radar),
-      const SectionLabel('Nächste 36 Stunden'),
+      SectionLabel(t('Nächste 36 Stunden')),
       if (hours.length > 2) _HourlyChart(hours),
-      const SectionLabel('Die nächsten Tage'),
+      SectionLabel(t('Die nächsten Tage')),
       for (final d in _days(w.hours)) _DayRow(d, _days(w.hours)),
       Container(height: 1, color: cs.outlineVariant, margin: const EdgeInsets.symmetric(horizontal: 16)),
     ];
@@ -265,7 +266,6 @@ class _DayRow extends StatelessWidget {
   final _Day d;
   final List<_Day> all;
   const _DayRow(this.d, this.all);
-  static const _wd = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +278,7 @@ class _DayRow extends StatelessWidget {
       child: Row(children: [
         SizedBox(
             width: 64,
-            child: Text(isToday ? 'Heute' : '${_wd[d.date.weekday - 1]} ${d.date.day}.',
+            child: Text(isToday ? t('Heute') : '${weekdaysShort[d.date.weekday - 1]} ${d.date.day}.',
                 style: sans(context, 14.5, w: FontWeight.w600))),
         Icon(cond(d.icon).$2, size: 22, color: iconColor(context, d.icon)),
         SizedBox(
@@ -350,7 +350,7 @@ class _HourlyChart extends StatelessWidget {
                       const SizedBox(height: 8),
                       Icon(cond(h['icon']).$2, size: 20, color: iconColor(context, h['icon'])),
                       const SizedBox(height: 6),
-                      Text('${two(DateTime.parse(h['timestamp']).toLocal().hour)} Uhr',
+                      Text(uiEn ? '${two(DateTime.parse(h['timestamp']).toLocal().hour)}:00' : '${two(DateTime.parse(h['timestamp']).toLocal().hour)} Uhr',
                           style: sans(context, 11.5, color: muted(context))),
                     ]),
                   ),
@@ -434,11 +434,11 @@ class _AlertCard extends StatelessWidget {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           leading: Icon(Icons.warning_amber_rounded, color: color),
-          title: Text(a['headline_de'] ?? a['event_de'] ?? 'Unwetterwarnung', style: sans(context, 14.5, w: FontWeight.w600)),
-          subtitle: exp == null ? null : Text('gültig bis ${clock(exp)}', style: sans(context, 12, color: muted(context))),
+          title: Text((uiEn ? a['headline_en'] : null) ?? a['headline_de'] ?? a['event_de'] ?? t('Unwetterwarnung'), style: sans(context, 14.5, w: FontWeight.w600)),
+          subtitle: exp == null ? null : Text('${t('gültig bis')} ${clock(exp)}', style: sans(context, 12, color: muted(context))),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           children: [
-            Text(a['description_de'] ?? '', style: sans(context, 14, h: 1.5)),
+            Text((uiEn ? a['description_en'] : null) ?? a['description_de'] ?? '', style: sans(context, 14, h: 1.5)),
             if ((a['instruction_de'] ?? '').toString().isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(a['instruction_de'], style: sans(context, 13, color: muted(context), h: 1.5)),
@@ -474,11 +474,11 @@ class _PlacePickerState extends State<_PlacePicker> {
       gpsError = null;
     });
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) throw 'Standortdienst ist ausgeschaltet.';
+      if (!await Geolocator.isLocationServiceEnabled()) throw t('Standortdienst ist ausgeschaltet.');
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        throw 'Kein Zugriff auf den Standort erlaubt.';
+        throw t('Kein Zugriff auf den Standort erlaubt.');
       }
       final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 15)));
@@ -488,7 +488,7 @@ class _PlacePickerState extends State<_PlacePicker> {
       if (mounted) {
         setState(() {
           locating = false;
-          gpsError = e is String ? e : 'Standort konnte nicht ermittelt werden.';
+          gpsError = e is String ? e : t('Standort konnte nicht ermittelt werden.');
         });
       }
     }
@@ -518,7 +518,7 @@ class _PlacePickerState extends State<_PlacePicker> {
             child: TextField(
               autofocus: true,
               decoration: InputDecoration(
-                hintText: 'Ort oder Postleitzahl',
+                hintText: t('Ort oder Postleitzahl'),
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: cs.surfaceContainer,
@@ -540,7 +540,7 @@ class _PlacePickerState extends State<_PlacePicker> {
           Expanded(
             child: ListView(children: [
               if (results.isEmpty && app.recentPlaces.isNotEmpty) ...[
-                const SectionLabel('Zuletzt verwendet'),
+                SectionLabel(t('Zuletzt verwendet')),
                 for (final p in app.recentPlaces) tile(p, icon: Icons.history),
               ],
               for (final p in results) tile(p),
@@ -568,19 +568,22 @@ class _Nowcast extends StatelessWidget {
     final firstRain = future.where((r) => r.$2 >= 0.1).firstOrNull;
     final lastRainIdx = wet.lastIndexOf(true);
     final peak = future.map((r) => r.$2).fold<double>(0, max);
-    final kind = peak < 1 ? 'Leichter Regen' : (peak < 4 ? 'Regen' : 'Starker Regen');
+    final kind = t(peak < 1 ? 'Leichter Regen' : (peak < 4 ? 'Regen' : 'Starker Regen'));
+    final u = uiEn ? '' : ' Uhr';
     String hm(DateTime t) => '${two(t.hour)}:${two(t.minute)}';
     final String text;
     if (firstRain == null) {
-      text = 'Kein Niederschlag in den nächsten zwei Stunden';
+      text = t('Kein Niederschlag in den nächsten zwei Stunden');
     } else if (rainNow && wet.every((x) => x)) {
-      text = '$kind hält an';
+      text = '$kind ${t('hält an')}';
     } else if (rainNow && !wet.sublist(wet.indexOf(false)).contains(true)) {
-      text = '$kind endet voraussichtlich gegen ${hm(future[wet.indexOf(false)].$1)} Uhr';
+      text = '$kind ${t('endet voraussichtlich gegen')} ${hm(future[wet.indexOf(false)].$1)}$u';
     } else if (!rainNow && wet.sublist(wet.indexOf(true)).every((x) => x)) {
-      text = '$kind ab etwa ${hm(firstRain.$1)} Uhr';
+      text = '$kind ${t('ab etwa')} ${hm(firstRain.$1)}$u';
     } else {
-      text = 'Zeitweise ${kind.replaceFirst('L', 'l').replaceFirst('S', 's')} bis etwa ${hm(future[lastRainIdx].$1)} Uhr';
+      text = uiEn
+          ? '${t('Zeitweise')} ${kind.toLowerCase()} ${t('bis etwa')} ${hm(future[lastRainIdx].$1)}'
+          : 'Zeitweise ${kind.replaceFirst('L', 'l').replaceFirst('S', 's')} bis etwa ${hm(future[lastRainIdx].$1)} Uhr';
     }
     final maxV = future.map((r) => r.$2).fold<double>(1.0, max);
     return Container(
@@ -616,7 +619,7 @@ class _Nowcast extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Row(children: [
-          Text('jetzt', style: sans(context, 11, color: muted(context))),
+          Text(t('jetzt'), style: sans(context, 11, color: muted(context))),
           const Spacer(),
           Text('+1 Std.', style: sans(context, 11, color: muted(context))),
           const Spacer(),

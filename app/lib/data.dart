@@ -9,7 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'i18n.dart';
 import 'models.dart';
+import 'translate.dart';
 
 const feedBase = 'https://nextcwc-hub.github.io/ueberblick/v1/';
 
@@ -45,7 +47,28 @@ class AppState extends ChangeNotifier {
   Directory? _dir;
   final appearance = Appearance();
 
-  List<Story> stories = [];
+  List<Story> _orig = []; // Originalfassungen (Deutsch)
+  List<Story>? _txMemo;
+  int _txVer = 0, _memoVer = -1;
+  List<Story>? _memoSrc;
+
+  /// Meldungen in der eingestellten Sprache (übersetzt, sobald verfügbar)
+  List<Story> get stories {
+    if (lang == 'de') return _orig;
+    if (_txMemo == null || _memoVer != _txVer || !identical(_memoSrc, _orig)) {
+      _txMemo = [for (final s in _orig) tx(s)];
+      _memoVer = _txVer;
+      _memoSrc = _orig;
+    }
+    return _txMemo!;
+  }
+
+  set stories(List<Story> v) => _orig = v;
+
+  // Sprache
+  String lang = 'de';
+  final translator = DeviceTranslator();
+  bool _translating = false;
   List<Story> pending = []; // neu eingetroffen, noch nicht eingeblendet
   List<Story>? _pendingAll;
   DateTime? generated;
@@ -80,6 +103,8 @@ class AppState extends ChangeNotifier {
     detailed = p.getBool('detailed') ?? false;
     sort = SortMode.values[min(p.getInt('sort') ?? 0, SortMode.values.length - 1)];
     mood = Mood.values[p.getInt('mood') ?? 0];
+    lang = p.getString('lang') ?? 'de';
+    uiEn = lang != 'de';
     try {
       final pl = p.getString('place');
       if (pl != null) place = Place.fromJson(jsonDecode(pl));
@@ -94,6 +119,9 @@ class AppState extends ChangeNotifier {
       if (await f.exists()) _applyIndex(jsonDecode(await f.readAsString()), applyNow: true);
       final m = File('${_dir!.path}/markets.json');
       if (await m.exists()) _applyMarkets(jsonDecode(await m.readAsString()));
+    } catch (_) {}
+    try {
+      await translator.init(_dir, lang);
     } catch (_) {}
   }
 
@@ -155,6 +183,7 @@ class AppState extends ChangeNotifier {
       if (old.containsKey(s.id) && old[s.id] != s.ver) _articles.remove(s.id);
     }
     _days.remove(_dayKey(DateTime.now()));
+    Future.microtask(_translateAll);
     if (applyNow || stories.isEmpty) {
       stories = fresh;
       pending = [];
@@ -224,29 +253,31 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  List<Story>? cachedDay(DateTime d) => _days[_dayKey(d)];
+  List<Story>? cachedDay(DateTime d) => _days[_dayKey(d)] == null ? null : [for (final s in _days[_dayKey(d)]!) tx(s)];
 
   Future<List<Story>> dayStories(DateTime d) async {
     final key = _dayKey(d);
-    if (_days[key] != null) return _days[key]!;
+    if (_days[key] != null) return [for (final s in _days[key]!) tx(s)];
     try {
       final j = await _get('days/$key.json', cacheSec: 120);
       final l = j == null ? <Story>[] : [for (final s in j['stories']) Story(Map<String, dynamic>.from(s))];
       // Aktuelle Fassungen aus dem Index bevorzugen
-      final cur = {for (final s in stories) s.id: s};
+      final cur = {for (final s in _orig) s.id: s};
       final ids = {for (final s in l) s.id};
-      return _days[key] = [
+      _days[key] = [
         for (final s in l) cur[s.id] ?? s,
-        for (final s in stories) if (_dayKey(s.created) == key && !ids.contains(s.id)) s,
+        for (final s in _orig) if (_dayKey(s.created) == key && !ids.contains(s.id)) s,
       ];
+      _translateList(_days[key]!);
+      return [for (final s in _days[key]!) tx(s)];
     } catch (_) {
-      return stories.where((s) => _dayKey(s.created) == key).toList();
+      return [for (final s in _orig) if (_dayKey(s.created) == key) tx(s)];
     }
   }
 
   Story? byId(String id) {
-    for (final s in stories) {
-      if (s.id == id) return s;
+    for (final s in _orig) {
+      if (s.id == id) return tx(s);
     }
     final sv = saved[id];
     return sv == null ? null : Story(Map<String, dynamic>.from(sv['story']));
@@ -295,14 +326,14 @@ class AppState extends ChangeNotifier {
             caseSensitive: a.length <= 4)
     ];
     final cats = {'boerse', 'wirtschaft', 'digital', 'ausland', 'inland'};
-    final l = stories.where((s) {
+    final l = _orig.where((s) {
       if (s.assets.contains(m.sym)) return true;
       if (!cats.contains(s.cat) || pats.isEmpty) return false;
       final text = '${s.title} ${s.teaser} ${s.summary.join(' ')}';
       return pats.any((p) => p.hasMatch(text));
     }).toList()
       ..sort((a, b) => b.created.compareTo(a.created));
-    return l;
+    return [for (final s in l) tx(s)];
   }
 
   // ---------- Orte
@@ -387,7 +418,102 @@ class AppState extends ChangeNotifier {
 
   List<Story> get savedStories {
     final e = saved.entries.toList()..sort((a, b) => (b.value['at'] as int).compareTo(a.value['at'] as int));
-    return [for (final x in e) Story(Map<String, dynamic>.from(x.value['story']))];
+    return [for (final x in e) tx(Story(Map<String, dynamic>.from(x.value['story'])))];
+  }
+
+  // ---------- Übersetzung (auf dem Gerät)
+  /// Übersetzte Fassung einer Meldung, falls schon vorhanden – sonst das Original.
+  Story tx(Story s) {
+    if (lang == 'de') return s;
+    final c = translator.cached;
+    final title = c(s.title), teaser = c(s.teaser);
+    final summary = [for (final x in s.summary) c(x)];
+    if (title == null || teaser == null || summary.contains(null)) return s;
+    return Story({...s.raw, 'title': title, 'teaser': teaser, 'summary': summary, '_tx': true});
+  }
+
+  Future<void> _translateList(List<Story> l) async {
+    if (lang == 'de' || !translator.active) return;
+    var n = 0;
+    for (final s in l) {
+      if (lang == 'de') return;
+      if (tx(s).raw['_tx'] == true) continue;
+      await translator.text(s.title);
+      await translator.text(s.teaser);
+      for (final x in s.summary) {
+        await translator.text(x);
+      }
+      if (++n % 6 == 0) {
+        _txVer++;
+        notifyListeners();
+      }
+    }
+    if (n > 0) {
+      _txVer++;
+      notifyListeners();
+      translator.save();
+    }
+  }
+
+  void _translateAll() async {
+    if (_translating) return;
+    _translating = true;
+    try {
+      await _translateList(_orig);
+    } finally {
+      _translating = false;
+    }
+  }
+
+  final Map<String, (Article, Article)> _articleTx = {};
+
+  Article? cachedArticleFor(String id) {
+    final a = _articles[id];
+    if (a == null || lang == 'de') return a;
+    final c = _articleTx[id];
+    return c != null && identical(c.$1, a) ? c.$2 : null;
+  }
+
+  /// Artikel in der eingestellten Sprache (wird beim ersten Öffnen übersetzt).
+  Future<Article?> articleFor(String id) async {
+    final a = await article(id);
+    if (a == null || lang == 'de' || !translator.active) return a;
+    final c = _articleTx[id];
+    if (c != null && identical(c.$1, a)) return c.$2;
+    final tr = translator.text;
+    final raw = {
+      ...a.raw,
+      'sections': [
+        for (final sec in a.sections) {'h': await tr(sec.h), 'text': await _paragraphs(sec.text)}
+      ],
+      'facts': [for (final f in a.facts) {'k': await tr(f.key), 'v': await tr(f.value)}],
+      'positions': [for (final p in a.positions) {'who': await tr(p.key), 'view': await tr(p.value)}],
+      'outlook': await tr(a.outlook),
+    };
+    translator.save();
+    final out = Article(raw);
+    _articleTx[id] = (a, out);
+    return out;
+  }
+
+  Future<String> _paragraphs(String text) async {
+    final parts = text.split(RegExp(r'\n\s*\n'));
+    return [for (final p in parts) await translator.text(p.trim())].join('\n\n');
+  }
+
+  /// Sprache wechseln – lädt bei Bedarf das Sprachpaket. Gibt false zurück, wenn das nicht klappt.
+  Future<bool> setLang(String code) async {
+    final ok = await translator.setLanguage(code, _dir);
+    if (!ok) return false;
+    lang = code;
+    uiEn = code != 'de';
+    _txVer++;
+    _articleTx.clear();
+    _set((p) => p.setString('lang', code));
+    appearance.changed();
+    notifyListeners();
+    _translateAll();
+    return true;
   }
 
   // ---------- Einstellungen

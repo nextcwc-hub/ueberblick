@@ -4,6 +4,7 @@ import '../data.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'home.dart';
+import '../i18n.dart';
 
 class SavedScreen extends StatelessWidget {
   const SavedScreen({super.key});
@@ -19,7 +20,7 @@ class SavedScreen extends StatelessWidget {
           return ListView(children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-              child: Text('Gemerkt', style: serif(context, 26, w: FontWeight.w700)),
+              child: Text(t('Gemerkt'), style: serif(context, 26, w: FontWeight.w700)),
             ),
             if (list.isEmpty)
               Padding(

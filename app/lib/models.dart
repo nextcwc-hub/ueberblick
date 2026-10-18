@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'i18n.dart';
 
 class Img {
   final String url, credit, license, src, author, title, licenseUrl;
@@ -154,25 +155,25 @@ class Place {
   String get label => plz.isEmpty ? name : '$plz $name';
 }
 
-String ago(DateTime t) {
-  final d = DateTime.now().difference(t);
-  if (d.inMinutes < 1) return 'gerade eben';
-  if (d.inMinutes < 60) return 'vor ${d.inMinutes} Min.';
-  if (d.inHours < 6) return 'vor ${d.inHours} Std.';
-  return clock(t);
+String ago(DateTime at) {
+  final d = DateTime.now().difference(at);
+  if (d.inMinutes < 1) return t('gerade eben');
+  if (d.inMinutes < 60) return minutesAgo(d.inMinutes);
+  if (d.inHours < 6) return hoursAgo(d.inHours);
+  return clock(at);
 }
 
 String two(int n) => n.toString().padLeft(2, '0');
 
-String clock(DateTime t) {
+String clock(DateTime tm) {
   final now = DateTime.now();
-  final hm = '${two(t.hour)}:${two(t.minute)}';
-  final day = DateTime(t.year, t.month, t.day);
+  final hm = '${two(tm.hour)}:${two(tm.minute)}';
+  final day = DateTime(tm.year, tm.month, tm.day);
   final today = DateTime(now.year, now.month, now.day);
   final diff = today.difference(day).inDays;
-  if (diff == 0) return 'heute, $hm';
-  if (diff == 1) return 'gestern, $hm';
-  return '${two(t.day)}.${two(t.month)}., $hm';
+  if (diff == 0) return '${t('heute')}, $hm';
+  if (diff == 1) return '${t('gestern')}, $hm';
+  return uiEn ? '${tm.day}/${tm.month}, $hm' : '${two(tm.day)}.${two(tm.month)}., $hm';
 }
 
 String fmtNum(double v, {int digits = 2}) {
