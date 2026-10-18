@@ -34,9 +34,20 @@ const _impressum = [
         'Schriften: Source Serif 4 und Inter (SIL Open Font License).'
   ),
   (
+    'Haftung für Inhalte',
+    'Die Texte werden automatisiert erstellt und vor der Veröffentlichung nicht einzeln von Menschen geprüft. '
+        'Für Richtigkeit, Vollständigkeit und Aktualität wird keine Gewähr übernommen. Die Inhalte dienen der '
+        'allgemeinen Information und sind keine Rechts-, Finanz-, Anlage- oder medizinische Beratung. Maßgeblich '
+        'sind die verlinkten Originalberichte und amtlichen Quellen.\n\n'
+        'Wird mir ein fehlerhafter oder rechtsverletzender Inhalt bekannt, korrigiere oder entferne ich ihn '
+        'umgehend. Hinweise bitte über „Fehler melden“ im Artikel oder per E-Mail an $operatorEmail.'
+  ),
+  (
     'Haftung für Links',
     'Die Artikel verlinken auf Berichte anderer Medien. Für deren Inhalte sind ausschließlich die jeweiligen '
-        'Anbieter verantwortlich. Die verlinkten Medien haben die Texte dieser App weder verfasst noch geprüft.'
+        'Anbieter verantwortlich. Zum Zeitpunkt der Verlinkung waren keine Rechtsverstöße erkennbar; bei '
+        'Bekanntwerden werden entsprechende Links entfernt. Die verlinkten Medien haben die Texte dieser App weder '
+        'verfasst noch geprüft.'
   ),
 ];
 

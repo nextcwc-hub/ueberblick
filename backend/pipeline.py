@@ -127,6 +127,8 @@ def main(out: Path):
             recent[s["cat"]] = recent.get(s["cat"], 0) + 1
     for ev in events.values():
         n_src = len(distinct_sources(ev))
+        if ev.get("blocked") or (ev.get("hold") and n_src < 2):
+            continue
         if not ev["written"]:
             ok = ev["imp"] >= 6 or (ev["imp"] >= 4 and (n_src >= 2 or ev.get("tone") == "positiv")) or n_src >= 3
             # Nur schreiben, wenn mindestens eine Quelle Text-Mining erlaubt (sonst gäbe es nur Schlagzeilen)
@@ -176,6 +178,11 @@ def main(out: Path):
 
     for ev, res, imgs in results:
         if not res:
+            continue
+        if res.get("sensitive") and len(distinct_sources(ev)) < 2:
+            # Vorwürfe gegen Personen/Unternehmen erst veröffentlichen, wenn mindestens zwei Medien berichten
+            ev["hold"] = True
+            print(f"  zurückgestellt (heikel, nur eine Quelle): {res['title'][:60]}")
             continue
         res["assets"] = [a for a in res.get("assets", []) if a in codes][:6]
         publish(v1, stories, ev, res, imgs, now)
@@ -262,7 +269,32 @@ def archive(v1: Path, stories: dict, now: float):
             p.unlink()
 
 
+def blocklist() -> set[str]:
+    """Sperrliste (backend/sperrliste.txt): eine Artikel-ID pro Zeile – entfernt Artikel dauerhaft."""
+    p = Path(__file__).with_name("sperrliste.txt")
+    if not p.exists():
+        return set()
+    return {ln.split("#")[0].strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.split("#")[0].strip()}
+
+
+def apply_blocklist(v1: Path, state: dict, stories: dict):
+    blocked = blocklist()
+    if not blocked:
+        return
+    for sid in blocked:
+        stories.pop(sid, None)
+        (v1 / "a" / f"{sid}.json").unlink(missing_ok=True)
+        if sid in state["events"]:
+            state["events"][sid]["blocked"] = True
+    for p in (v1 / "days").glob("*.json"):
+        d = load(p, {"stories": []})
+        keep = [s for s in d["stories"] if s["id"] not in blocked]
+        if len(keep) != len(d["stories"]):
+            save(p, {**d, "stories": keep})
+
+
 def finish(out: Path, v1: Path, state: dict, stories: dict, now: float):
+    apply_blocklist(v1, state, stories)
     archive(v1, stories, now)
     for sid, s in list(stories.items()):
         if now - s["updated"] > KEEP_H * 3600:

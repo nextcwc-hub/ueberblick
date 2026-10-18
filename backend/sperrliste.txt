@@ -1,0 +1,4 @@
+# Sperrliste: Artikel, die sofort und dauerhaft aus der App entfernt werden.
+# Eine Artikel-ID pro Zeile (steht in der „Fehler melden“-E-Mail, z. B. e1a2b3c4d5).
+# Auf GitHub bearbeiten: Datei öffnen -> Stift-Symbol -> ID eintragen -> „Commit changes“.
+# Wirksam ab dem nächsten Lauf (spätestens nach ca. 15 Minuten).

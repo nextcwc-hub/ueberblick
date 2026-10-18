@@ -212,7 +212,8 @@ Ausgabe:
 - image: Index des passendsten Bildkandidaten oder -1, wenn keiner wirklich passt. Ein Bild passt nur, wenn es das Thema zeigt, ohne in die Irre zu führen (kein Foto eines anderen Ereignisses, das wie das aktuelle wirkt; Porträts nur von zentral beteiligten Personen). Im Zweifel -1.
 - location: Hauptort (Stadt/Land) oder leer.
 - tone: Wirkung der Nachricht auf Leser. "positiv" = überwiegend gute Nachricht (Fortschritt, Erfolg, Rettung, Einigung, Durchbruch, Verbesserung, sportlicher Erfolg, erfreuliche Entdeckung). "negativ" = überwiegend belastend (Krieg, Gewalt, Tod, Katastrophe, Unglück, Verbrechen, schwere Krise, Verschlechterung). Sonst "neutral" (sachliche Politik, Zahlen ohne klare Richtung, gemischte Lage).
-- assets: Kürzel der Marktwerte aus der mitgelieferten Liste, die direkt Gegenstand der Meldung sind (betroffenes Unternehmen, Index, Rohstoff, Währung). Leer, wenn keiner direkt betroffen ist oder keine Liste mitgeliefert wurde."""
+- assets: Kürzel der Marktwerte aus der mitgelieferten Liste, die direkt Gegenstand der Meldung sind (betroffenes Unternehmen, Index, Rohstoff, Währung). Leer, wenn keiner direkt betroffen ist oder keine Liste mitgeliefert wurde.
+- sensitive: true, wenn die Meldung im Kern schwere Vorwürfe (Straftaten, Fehlverhalten, Skandale) gegen benannte oder erkennbare Personen oder Unternehmen enthält, die noch nicht gerichtlich festgestellt sind; sonst false."""
 
 WRITER_SCHEMA = {
     "type": "object",
@@ -239,9 +240,10 @@ WRITER_SCHEMA = {
         "location": {"type": "string"},
         "tone": {"type": "string", "enum": ["positiv", "neutral", "negativ"]},
         "assets": {"type": "array", "items": {"type": "string"}},
+        "sensitive": {"type": "boolean"},
     },
     "required": ["title", "teaser", "summary", "sections", "facts", "positions",
-                 "outlook", "cat", "imp", "image", "location", "tone", "assets"],
+                 "outlook", "cat", "imp", "image", "location", "tone", "assets", "sensitive"],
     "additionalProperties": False,
 }
 
