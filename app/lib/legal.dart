@@ -3,15 +3,20 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 
 // Angaben der verantwortlichen Person (Pflicht für Nachrichtenangebote nach § 18 Abs. 2 MStV).
-const operatorName = '[Vor- und Nachname]';
-const operatorAddress = '[Straße und Hausnummer, PLZ Ort]';
-const operatorEmail = '[E-Mail-Adresse]';
+const operatorBrand = 'NullAxis';
+const operatorName = 'Adrian Muss';
+const operatorAddress = 'c/o Online-Impressum 11981\nEuroparing 90\n53757 Sankt Augustin';
+const operatorEmail = 'nullaxis@mail.online-impressum.de';
+const operatorPhone = '+49 1590 1327317';
 
 bool get operatorSet => !operatorEmail.startsWith('[');
 
 const _impressum = [
-  ('Angaben gemäß § 18 Abs. 2 MStV', '$operatorName\n$operatorAddress\nE-Mail: $operatorEmail'),
-  ('Verantwortlich für den Inhalt', '$operatorName (Anschrift wie oben)'),
+  (
+    'Angaben gemäß § 18 MStV',
+    '$operatorBrand — $operatorName\n$operatorAddress\n\nE-Mail: $operatorEmail\nTelefon: $operatorPhone'
+  ),
+  ('Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV', '$operatorName, Anschrift wie oben'),
   (
     'Über dieses Angebot',
     'Überblick ist ein privates, nicht-kommerzielles Angebot ohne Werbung und ohne Bezahlinhalte. '

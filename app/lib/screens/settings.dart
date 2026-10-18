@@ -75,7 +75,8 @@ class SettingsScreen extends StatelessWidget {
           const SectionLabel('Rechtliches'),
           ListTile(
             leading: const Icon(Icons.info_outline),
-            title: const Text('Impressum, Quellen und Lizenzen'),
+            title: const Text('Impressum'),
+            subtitle: const Text('Anbieter, Quellen und Lizenzen'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen())),
           ),
